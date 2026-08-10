@@ -37,6 +37,9 @@ yarn-error.log*
 # internal tooling / superpowers
 .superpowers/
 
+# git worktrees
+.worktrees/
+
 # IDE settings
 .vscode/
 .idea/
