@@ -127,36 +127,6 @@ export interface AuditLog {
   created_at: string;
 }
 
-export interface TelegramAccount {
-  user_id: string;
-  connected: boolean;
-  telegram_user_id?: string;
-  username?: string;
-  phone?: string;
-  session_encrypted: boolean;
-  last_sync: string;
-}
-
-export interface TelegramChat {
-  id: string;
-  title: string;
-  type: 'private' | 'group' | 'channel';
-  avatar_url?: string;
-  unread_count: number;
-  last_message?: string;
-  last_message_date?: string;
-}
-
-export interface TelegramMessage {
-  id: string;
-  chat_id: string;
-  sender_name: string;
-  is_outgoing: boolean;
-  content: string;
-  date: string;
-  attachments?: Attachment[];
-}
-
 export type TelegramIdentityStatus = 'active' | 'disconnected';
 export type TelegramRelayDirection = 'inbound' | 'outbound';
 export type TelegramOutboxStatus = 'pending' | 'leased' | 'sent' | 'failed';

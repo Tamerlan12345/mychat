@@ -10,7 +10,7 @@ export default function AdminRolesPage() {
     { name: 'Отправка сообщений & файлов', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: true } },
     { name: 'Создание групповых чатов', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: true } },
     { name: 'Создание каналов', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: false } },
-    { name: 'Подключение Telegram User Bridge', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: true } },
+    { name: 'Подключение Telegram Bot API relay', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: true } },
     { name: 'Модерация & Удаление чужих сообщений', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: true, EMPLOYEE: false } },
     { name: 'Управление пользователями & Блокировки', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: false, EMPLOYEE: false } },
     { name: 'Управление брендингом (White-Label)', roles: { SUPER_ADMIN: true, ADMIN: true, MODERATOR: false, EMPLOYEE: false } },

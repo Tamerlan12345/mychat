@@ -6,6 +6,7 @@ import { globalDataProvider } from '@/lib/provider/mock-provider';
 describe('MockAuthProvider', () => {
   beforeEach(() => {
     localStorage.clear();
+    globalDataProvider.setCurrentUser('u1');
   });
 
   it('signs in a known, non-blocked user regardless of password', async () => {
@@ -36,6 +37,18 @@ describe('MockAuthProvider', () => {
     const provider = new MockAuthProvider();
     await provider.signIn('admin@demo.local', 'x');
     expect(await provider.getCurrentUserId()).toBe('u1');
+  });
+
+  it('synchronizes the data provider on sign-in and restored sessions', async () => {
+    const provider = new MockAuthProvider();
+
+    await provider.signIn('employee1@demo.local', 'x');
+    expect((await globalDataProvider.getUserSettings()).user_id).toBe('u2');
+    expect(await globalDataProvider.getTelegramIdentity()).toBeNull();
+
+    localStorage.setItem('corporate_chat_user_id', 'u1');
+    expect(await provider.getCurrentUserId()).toBe('u1');
+    expect((await globalDataProvider.getTelegramIdentity())?.profile_id).toBe('u1');
   });
 
   it('signOut clears the stored session', async () => {

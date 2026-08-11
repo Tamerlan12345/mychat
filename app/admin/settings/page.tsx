@@ -75,11 +75,11 @@ export default function AdminSettingsPage() {
 
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
               <div>
-                <p className="text-slate-400 font-sans">Telegram Mautrix Bridge</p>
-                <p className="text-slate-500 text-[11px]">TELEGRAM_BRIDGE_URL</p>
+                <p className="text-slate-400 font-sans">Telegram Bot API relay</p>
+                <p className="text-slate-500 text-[11px]">Серверная конфигурация relay</p>
               </div>
               <span className="text-sky-400 font-sans font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Подключен
+                <ShieldCheck className="w-3.5 h-3.5" /> Управляется сервером
               </span>
             </div>
 

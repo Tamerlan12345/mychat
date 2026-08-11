@@ -57,9 +57,9 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Telegram Bridge</span>
-              <p className="font-semibold text-sky-400">Mautrix Bridge Service</p>
-              <p className="text-slate-400 text-[11px]">Безопасное шифрование пользовательских сессий</p>
+              <span className="text-[10px] font-bold text-slate-500 uppercase">Telegram relay</span>
+              <p className="font-semibold text-sky-400">Telegram Bot API relay</p>
+              <p className="text-slate-400 text-[11px]">Ссылки привязки и доставка уведомлений через Bot API</p>
             </div>
           </div>
         </div>

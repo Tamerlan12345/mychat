@@ -205,7 +205,11 @@ export const TelegramView: React.FC = () => {
                 </div>
               </div>
 
-              {connected ? (
+              {accountLoading ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-500">
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Проверяем связь с Telegram…
+                </div>
+              ) : connected ? (
                 <div className="space-y-4">
                   <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
                     <p className="text-xs font-medium text-emerald-800">Telegram-чат связан</p>

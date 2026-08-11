@@ -9,7 +9,6 @@ import {
   Attachment,
   BrandingConfig,
   AuditLog,
-  TelegramAccount,
   TelegramIdentity,
   TelegramRelayLog,
   UserSettings,
@@ -732,27 +731,6 @@ export class SupabaseDataProvider implements IDataProvider {
     if (error) throw new Error(`updateUserSettings failed: ${error.message}`);
 
     return data as UserSettings;
-  }
-
-  async getTelegramAccount(userId: string): Promise<TelegramAccount> {
-    const { data, error } = await this.client
-      .from('telegram_accounts')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (error) throw new Error(`getTelegramAccount failed: ${error.message}`);
-    if (!data) {
-      return { user_id: userId, connected: false, session_encrypted: false, last_sync: new Date().toISOString() };
-    }
-    return {
-      user_id: data.user_id,
-      connected: data.connected,
-      telegram_user_id: data.telegram_user_id ?? undefined,
-      username: data.username ?? undefined,
-      phone: data.phone ?? undefined,
-      session_encrypted: !!data.session_encrypted,
-      last_sync: data.last_sync,
-    };
   }
 
 }

@@ -15,6 +15,7 @@ export class MockAuthProvider implements IAuthProvider {
       return { success: false, error: 'Ваш аккаунт заблокирован администратором.' };
     }
 
+    globalDataProvider.setCurrentUser(found.id);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, found.id);
     }
@@ -29,7 +30,17 @@ export class MockAuthProvider implements IAuthProvider {
 
   async getCurrentUserId(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(STORAGE_KEY);
+    const userId = localStorage.getItem(STORAGE_KEY);
+    if (!userId) return null;
+
+    const user = await globalDataProvider.getUserById(userId);
+    if (!user) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+
+    globalDataProvider.setCurrentUser(userId);
+    return userId;
   }
 
   onAuthStateChange(_callback: (userId: string | null) => void): () => void {
