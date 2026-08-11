@@ -15,13 +15,14 @@ const migration = readFileSync(
   'utf8',
 );
 
-const retryConfig = { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000 };
+const retryConfig = { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000, maxRetryAfterMs: 300_000 };
 const now = 1_755_000_000_000;
 
 function row(overrides: Partial<TelegramNotificationOutbox> = {}): TelegramNotificationOutbox {
   return {
     id: 'outbox-1',
     profile_id: 'profile-1',
+    telegram_user_id: 123456789,
     idempotency_key: 'message-1:profile-1',
     telegram_chat_id: 987654321,
     payload: { text: 'Alice: hello' },
@@ -46,6 +47,7 @@ function dependencies(
   leaseOutbox: ReturnType<typeof vi.fn>;
   completeOutbox: ReturnType<typeof vi.fn>;
   failOutbox: ReturnType<typeof vi.fn>;
+  canSendOutbox: ReturnType<typeof vi.fn>;
   sendTelegramMessage: ReturnType<typeof vi.fn>;
 } {
   return {
@@ -53,6 +55,7 @@ function dependencies(
     completeOutbox: vi.fn().mockResolvedValue(true),
     failOutbox: vi.fn().mockResolvedValue(true),
     sendTelegramMessage: vi.fn().mockResolvedValue({ telegramMessageId: 42 }),
+    canSendOutbox: vi.fn().mockResolvedValue(true),
     now: () => now,
     random: () => 0.5,
   };
@@ -106,6 +109,18 @@ describe('Telegram outbox worker', () => {
     expect(deps.failOutbox).toHaveBeenCalledWith(expect.objectContaining({
       errorCode: 'RATE_LIMITED',
       retryAt: new Date(now + 17_000),
+    }));
+  });
+
+  it('caps an excessive Telegram retry_after before scheduling retry', async () => {
+    const deps = dependencies();
+    deps.sendTelegramMessage.mockRejectedValueOnce(new TelegramBotApiError('RATE_LIMITED', 429, 999_999));
+
+    await processTelegramOutbox({ retry: retryConfig, dependencies: deps });
+
+    expect(deps.failOutbox).toHaveBeenCalledWith(expect.objectContaining({
+      errorCode: 'RATE_LIMITED',
+      retryAt: new Date(now + retryConfig.maxRetryAfterMs),
     }));
   });
 
@@ -191,6 +206,34 @@ describe('Telegram outbox worker', () => {
     expect(deps.failOutbox).not.toHaveBeenCalled();
   });
 
+  it('keeps an accepted send ambiguous at max attempts for SQL stale-lease cleanup', async () => {
+    const deps = dependencies([row({ attempts: 5, max_attempts: 5 })]);
+    deps.completeOutbox.mockResolvedValueOnce(false);
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toMatchObject({ sent: 0, failed: 0, ambiguous: 1 });
+
+    expect(deps.failOutbox).not.toHaveBeenCalled();
+  });
+
+  it('does not send after the identity or settings become ineligible', async () => {
+    const deps = dependencies();
+    deps.canSendOutbox.mockResolvedValueOnce(false);
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toMatchObject({ sent: 0, failed: 1, ambiguous: 0 });
+
+    expect(deps.sendTelegramMessage).not.toHaveBeenCalled();
+    expect(deps.failOutbox).toHaveBeenCalledWith({
+      id: 'outbox-1',
+      leaseToken: 'lease-1',
+      errorCode: 'DELIVERY_DISABLED',
+      retryAt: null,
+    });
+  });
+
   it('does not classify completion persistence errors as Telegram send errors', async () => {
     const deps = dependencies();
     deps.completeOutbox.mockRejectedValueOnce(new Error('database unavailable'));
@@ -263,13 +306,17 @@ describe('Telegram outbox migration contract', () => {
     expect(migration).toMatch(/us\.telegram_enabled = TRUE/);
     expect(migration).toMatch(/CREATE TRIGGER enqueue_telegram_notification_after_insert/);
     expect(migration).toMatch(/ON CONFLICT \(idempotency_key\) DO NOTHING/);
+    expect(migration).toMatch(/profile_id, telegram_user_id, idempotency_key, telegram_chat_id, payload/);
+    expect(migration).toMatch(/'reference', NEW\.conversation_id::TEXT/);
   });
 
   it('does not expose the trigger or outbox mutations to browser roles', () => {
     expect(migration).toMatch(/REVOKE ALL ON telegram_link_tokens, telegram_identities,\s+telegram_relay_log, telegram_notification_outbox FROM PUBLIC, anon, authenticated/);
     expect(migration).toMatch(/REVOKE ALL ON FUNCTION enqueue_telegram_notification\(\) FROM PUBLIC, anon, authenticated/);
     expect(migration).toMatch(/FOR UPDATE SKIP LOCKED/);
-    expect(migration).toMatch(/status = 'leased' AND leased_until < NOW\(\)/);
+    expect(migration).toMatch(/status = 'leased' AND \(leased_until IS NULL OR leased_until < NOW\(\)\)/);
+    expect(migration).toMatch(/attempts >= max_attempts/);
+    expect(migration).toMatch(/can_send_telegram_outbox/);
   });
 
   it('excludes connected recipients and recipients with disabled settings', () => {
@@ -277,5 +324,26 @@ describe('Telegram outbox migration contract', () => {
     expect(migration).not.toMatch(/p\.status IN \([^)]*ONLINE/);
     expect(migration).toMatch(/us\.telegram_enabled = TRUE/);
     expect(migration).not.toMatch(/us\.telegram_enabled = TRUE\s+OR/);
+  });
+
+  it('creates outbound relay logs transactionally when completion succeeds', () => {
+    expect(migration).toMatch(/CREATE OR REPLACE FUNCTION complete_telegram_outbox/);
+    expect(migration).toMatch(/INSERT INTO telegram_relay_log \(/);
+    expect(migration).toMatch(/completed_outbox\.telegram_chat_id,[\s\S]*p_telegram_message_id, 'outbound'/);
+    expect(migration).toMatch(/completed_outbox\.telegram_user_id/);
+  });
+
+  it('cancels pending and leased rows when identity or settings are disabled', () => {
+    expect(migration).toMatch(/cancel_telegram_outbox_on_identity_change/);
+    expect(migration).toMatch(/cancel_telegram_outbox_on_settings_change/);
+    expect(migration).toMatch(/status IN \('pending', 'leased'\)/);
+    expect(migration).toMatch(/last_error_code = 'DELIVERY_DISABLED'/);
+  });
+
+  it('requires a correlated outbound log for inbound routing', () => {
+    expect(migration).toMatch(/p_reply_to_telegram_message_id BIGINT DEFAULT NULL/);
+    expect(migration).toMatch(/direction = 'outbound'/);
+    expect(migration).toMatch(/No safe correlated direct conversation found/);
+    expect(migration).not.toMatch(/ORDER BY c\.updated_at DESC\s+LIMIT 1/);
   });
 });

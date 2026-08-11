@@ -71,6 +71,13 @@ function textContent(message: TelegramRecord): string | null {
   return value;
 }
 
+function replyToTelegramMessageId(message: TelegramRecord): number | null {
+  if (!('reply_to_message' in message)) return null;
+  const reply = message.reply_to_message;
+  if (!isRecord(reply) || !positiveSafeInteger(reply.message_id)) return null;
+  return reply.message_id;
+}
+
 function startPayload(
   content: string,
   botUsername: string,
@@ -167,6 +174,7 @@ async function handleWebhook(request: Request): Promise<Response> {
       telegramChatId: chatId,
       telegramMessageId: messageId,
       content,
+      replyToTelegramMessageId: replyToTelegramMessageId(message),
     });
   } catch (error) {
     const code = repositoryErrorCode(error);

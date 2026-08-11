@@ -41,3 +41,49 @@ confirmation and a separate test URL.
 - `npx tsc --noEmit`: passed.
 - `npm run build`: passed; 17 routes compiled.
 - `git diff --check`: passed.
+
+## Final Fix Wave Report
+
+### Findings Closed
+
+- Outbound completion now stores `telegram_relay_log` direction `outbound` in
+  the same RPC transaction that marks the outbox row `sent`. The outbox captures
+  both Telegram IDs and a stable Centras message/conversation correlation.
+- Inbound webhook updates pass Telegram's reply-to message ID. The ingest RPC
+  routes only to a matching outbound log or one unambiguous outbound
+  conversation correlation, verifies direct membership, and rejects unknown or
+  ambiguous messages without selecting an arbitrary coworker.
+- Identity disconnect and notification disable changes cancel pending and leased
+  rows. Lease selection and the worker's immediate pre-send check revalidate the
+  active identity, recipient status, and setting without affecting normal chat
+  message persistence.
+- Expired rows at maximum attempts are marked terminal `failed` with a safe
+  error code, including rows left leased by ambiguous accepted-send completion.
+- Retry-After values are validated and capped by bounded retry configuration
+  before retry timestamps are scheduled.
+- Setup, design, and implementation-plan docs now describe at-least-once
+  delivery and possible duplicates under accepted-send/database uncertainty,
+  rather than exactly-once delivery.
+
+### Regression Coverage
+
+- Added focused tests for outbound correlation/log SQL contracts, reply-to
+  parsing, wrong-chat prevention, disconnect/settings cancellation, pre-send
+  eligibility, stale max-attempt cleanup, Retry-After validation/capping, and
+  ambiguous completion behavior.
+- Extended the guarded Supabase integration suite for transactional outbound
+  logs, uncorrelated inbound rejection, pending/leased cancellation, and stale
+  max-attempt terminalization.
+
+### Verification
+
+Final verification completed:
+
+- Focused relay suite: 7 files passed, 107 tests passed, 9 skipped.
+- Full `npm run test`: 15 files passed, 1 skipped; 150 tests passed, 9 skipped.
+- `npx tsc --noEmit`: passed.
+- `npm run build`: passed; all 17 routes compiled.
+- `git diff --check`: passed.
+
+Live Supabase and Telegram protocol checks remain manual and require a
+dedicated test project and real Bot API credentials.

@@ -11,6 +11,7 @@ export interface TelegramRetryConfig {
   maxAttempts: number;
   baseDelayMs: number;
   maxDelayMs: number;
+  maxRetryAfterMs: number;
 }
 
 export interface TelegramServerConfig {
@@ -28,6 +29,7 @@ export const DEFAULT_TELEGRAM_RETRY: Readonly<TelegramRetryConfig> = Object.free
   maxAttempts: 5,
   baseDelayMs: 1_000,
   maxDelayMs: 60_000,
+  maxRetryAfterMs: 300_000,
 });
 
 // Worker authentication requires a dedicated URL-safe secret of at least 32

@@ -29,6 +29,7 @@ export const TELEGRAM_RPCS = Object.freeze({
   leaseOutbox: 'lease_telegram_outbox',
   completeOutbox: 'complete_telegram_outbox',
   failOutbox: 'fail_telegram_outbox',
+  canSendOutbox: 'can_send_telegram_outbox',
 });
 
 export type TelegramRepositoryErrorCode =
@@ -69,6 +70,7 @@ export interface IngestTelegramInboundInput {
   telegramChatId: number;
   telegramMessageId: number;
   content: string;
+  replyToTelegramMessageId?: number | null;
 }
 
 export interface LeaseOutboxInput {
@@ -80,6 +82,11 @@ export interface CompleteOutboxInput {
   id: string;
   leaseToken: string;
   telegramMessageId?: number | null;
+}
+
+export interface CanSendOutboxInput {
+  id: string;
+  leaseToken: string;
 }
 
 export interface FailOutboxInput {
@@ -125,7 +132,7 @@ function providerErrorCode(error: unknown): TelegramRepositoryErrorCode {
   if (code === '23505' || /already linked|duplicate|unique/i.test(message)) return 'CONFLICT';
   if (code === 'PGRST116') return 'NOT_FOUND';
   if (/identity is not linked/i.test(message)) return 'IDENTITY_NOT_LINKED';
-  if (/no active direct conversation/i.test(message)) return 'NO_DIRECT_CONVERSATION';
+  if (/no active direct conversation|no safe correlated direct conversation/i.test(message)) return 'NO_DIRECT_CONVERSATION';
   return 'DATABASE_ERROR';
 }
 
@@ -265,9 +272,21 @@ export async function ingestTelegramInbound(
       p_telegram_chat_id: input.telegramChatId,
       p_telegram_message_id: input.telegramMessageId,
       p_content: input.content,
+      p_reply_to_telegram_message_id: input.replyToTelegramMessageId ?? null,
     });
     if (error) throw repositoryError(error);
     return data as Message;
+  });
+}
+
+export async function canSendOutbox(input: CanSendOutboxInput): Promise<boolean> {
+  return safely(async () => {
+    const { data, error } = await getTelegramServerClient().rpc(TELEGRAM_RPCS.canSendOutbox, {
+      p_id: input.id,
+      p_lease_token: input.leaseToken,
+    });
+    if (error) throw repositoryError(error);
+    return data === true;
   });
 }
 

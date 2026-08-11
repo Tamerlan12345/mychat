@@ -35,6 +35,8 @@ describeIntegration('Telegram outbox Supabase integration', () => {
   let senderId: string;
   let recipientId: string;
   let conversationId: string;
+  let telegramUserId: number;
+  let telegramChatId: number;
   const senderEmail = `telegram-outbox-sender-${Date.now()}@example.test`;
   const recipientEmail = `telegram-outbox-recipient-${Date.now()}@example.test`;
   const password = `Integration-${Date.now()}-secret`;
@@ -93,10 +95,12 @@ describeIntegration('Telegram outbox Supabase integration', () => {
 
     const settings = await service.from('user_settings').upsert({ user_id: recipientId, telegram_enabled: true });
     if (settings.error) throw new Error(`create settings: ${settings.error.message}`);
+    telegramUserId = Number(`${Date.now()}`.slice(-8));
+    telegramChatId = telegramUserId + 1;
     const identity = await service.from('telegram_identities').insert({
       profile_id: recipientId,
-      telegram_user_id: Number(`${Date.now()}`.slice(-8)),
-      telegram_chat_id: Number(`${Date.now() + 1}`.slice(-8)),
+      telegram_user_id: telegramUserId,
+      telegram_chat_id: telegramChatId,
       username: 'integration_recipient',
       status: 'active',
     });
@@ -107,6 +111,7 @@ describeIntegration('Telegram outbox Supabase integration', () => {
     await service.from('telegram_notification_outbox').delete().eq('profile_id', recipientId);
     await service.from('profiles').update({ status: 'OFFLINE' }).eq('id', recipientId);
     await service.from('user_settings').update({ telegram_enabled: true }).eq('user_id', recipientId);
+    await service.from('telegram_identities').update({ status: 'active' }).eq('profile_id', recipientId);
   });
 
   afterAll(async () => {
@@ -128,6 +133,7 @@ describeIntegration('Telegram outbox Supabase integration', () => {
 
     const duplicate = await service.from('telegram_notification_outbox').insert({
       profile_id: recipientId,
+      telegram_user_id: telegramUserId,
       idempotency_key: `${message.id}:${recipientId}`,
       telegram_chat_id: first.telegram_chat_id,
       payload: first.payload,
@@ -170,12 +176,13 @@ describeIntegration('Telegram outbox Supabase integration', () => {
   });
 
   it('reclaims stale leases but rejects stale completion and failure tokens', async () => {
-    await service.from('user_settings').update({ telegram_enabled: false }).eq('user_id', recipientId);
+    await service.from('user_settings').update({ telegram_enabled: true }).eq('user_id', recipientId);
     const stale = await must(
       service.from('telegram_notification_outbox').insert({
         profile_id: recipientId,
+        telegram_user_id: telegramUserId,
         idempotency_key: `stale-${Date.now()}`,
-        telegram_chat_id: 123456789,
+        telegram_chat_id: telegramChatId,
         payload: { text: 'stale lease' },
         status: 'leased',
         attempts: 1,
@@ -203,14 +210,114 @@ describeIntegration('Telegram outbox Supabase integration', () => {
     })).toBe(false);
   });
 
+  it('records an outbound relay log with the stable conversation correlation', async () => {
+    const message = await insertMessage('integration outbound correlation');
+    const leasedRows = await rpc('lease_telegram_outbox', { p_limit: 1, p_lease_seconds: 30 });
+    const leased = leasedRows.find((entry: any) => entry.payload.message_id === message.id);
+    expect(leased).toBeDefined();
+
+    expect(await rpc('complete_telegram_outbox', {
+      p_id: leased.id,
+      p_lease_token: leased.lease_token,
+      p_telegram_message_id: 88,
+    })).toBe(true);
+
+    const log = await must(
+      service.from('telegram_relay_log')
+        .select('*')
+        .eq('telegram_chat_id', telegramChatId)
+        .eq('telegram_message_id', 88)
+        .single(),
+      'read outbound relay log',
+    );
+    expect(log).toMatchObject({
+      profile_id: recipientId,
+      conversation_id: conversationId,
+      centras_message_id: message.id,
+      telegram_user_id: telegramUserId,
+      direction: 'outbound',
+    });
+  });
+
+  it('rejects uncorrelated inbound messages instead of choosing a direct chat', async () => {
+    const result = await service.rpc('ingest_telegram_inbound', {
+      p_telegram_user_id: telegramUserId,
+      p_telegram_chat_id: telegramChatId,
+      p_telegram_message_id: 89,
+      p_content: 'uncorrelated inbound',
+    });
+
+    expect(result.error).not.toBeNull();
+    const messages = await service.from('messages').select('id').eq('content', 'uncorrelated inbound');
+    expect(messages.error).toBeNull();
+    expect(messages.data).toEqual([]);
+  });
+
+  it('cancels pending and leased rows when settings or identity delivery is disabled', async () => {
+    const pendingMessage = await insertMessage('cancel pending');
+    const pending = await must(
+      service.from('telegram_notification_outbox').select('*')
+        .eq('idempotency_key', `${pendingMessage.id}:${recipientId}`).single(),
+      'read pending outbox',
+    );
+    await service.from('user_settings').update({ telegram_enabled: false }).eq('user_id', recipientId);
+    const cancelledPending = await must(
+      service.from('telegram_notification_outbox').select('*').eq('id', pending.id).single(),
+      'read settings-cancelled pending outbox',
+    );
+    expect(cancelledPending).toMatchObject({ status: 'failed', last_error_code: 'DELIVERY_DISABLED' });
+
+    await service.from('user_settings').update({ telegram_enabled: true }).eq('user_id', recipientId);
+    const leasedMessage = await insertMessage('cancel leased');
+    const leasedRows = await rpc('lease_telegram_outbox', { p_limit: 1, p_lease_seconds: 30 });
+    const leased = leasedRows.find((entry: any) => entry.payload.message_id === leasedMessage.id);
+    expect(leased).toBeDefined();
+
+    await service.from('telegram_identities').update({ status: 'disconnected' }).eq('profile_id', recipientId);
+    const cancelledLeased = await must(
+      service.from('telegram_notification_outbox').select('*').eq('id', leased.id).single(),
+      'read identity-cancelled leased outbox',
+    );
+    expect(cancelledLeased).toMatchObject({ status: 'failed', last_error_code: 'DELIVERY_DISABLED' });
+  });
+
+  it('terminalizes an expired lease at max attempts after ambiguous completion', async () => {
+    const stale = await must(
+      service.from('telegram_notification_outbox').insert({
+        profile_id: recipientId,
+        telegram_user_id: telegramUserId,
+        idempotency_key: `max-stale-${Date.now()}`,
+        telegram_chat_id: telegramChatId,
+        payload: { text: 'max stale' },
+        status: 'leased',
+        attempts: 5,
+        max_attempts: 5,
+        next_attempt_at: new Date(Date.now() - 1_000).toISOString(),
+        lease_token: '00000000-0000-0000-0000-000000000002',
+        leased_until: new Date(Date.now() - 1_000).toISOString(),
+      }).select('*').single(),
+      'create max-attempt stale outbox',
+    );
+
+    const leasedRows = await rpc('lease_telegram_outbox', { p_limit: 10, p_lease_seconds: 30 });
+    expect(leasedRows.some((entry: any) => entry.id === stale.id)).toBe(false);
+    const terminal = await must(
+      service.from('telegram_notification_outbox').select('*').eq('id', stale.id).single(),
+      'read max-attempt terminal outbox',
+    );
+    expect(terminal).toMatchObject({ status: 'failed', last_error_code: 'MAX_ATTEMPTS_EXCEEDED' });
+  });
+
   it('leases rows concurrently without assigning one row twice', async () => {
     const rows = await Promise.all([
       service.from('telegram_notification_outbox').insert({
-        profile_id: recipientId, idempotency_key: `concurrent-a-${Date.now()}`,
+        profile_id: recipientId, telegram_user_id: telegramUserId,
+        idempotency_key: `concurrent-a-${Date.now()}`,
         telegram_chat_id: 111111111, payload: { text: 'concurrent a' },
       }).select('id').single(),
       service.from('telegram_notification_outbox').insert({
-        profile_id: recipientId, idempotency_key: `concurrent-b-${Date.now()}`,
+        profile_id: recipientId, telegram_user_id: telegramUserId,
+        idempotency_key: `concurrent-b-${Date.now()}`,
         telegram_chat_id: 222222222, payload: { text: 'concurrent b' },
       }).select('id').single(),
     ]);

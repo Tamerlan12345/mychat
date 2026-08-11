@@ -168,6 +168,7 @@ export interface TelegramRelayLog {
 export interface TelegramNotificationOutbox {
   id: string;
   profile_id: string;
+  telegram_user_id: number;
   idempotency_key: string;
   telegram_chat_id: number;
   payload: Record<string, unknown>;

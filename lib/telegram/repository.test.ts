@@ -16,6 +16,7 @@ vi.mock('./server-client', () => ({
 
 import {
   claimTelegramLink,
+  canSendOutbox,
   completeOutbox,
   createTelegramLink,
   disconnectTelegramIdentity,
@@ -126,6 +127,7 @@ describe('Telegram repository', () => {
 
     await ingestTelegramInbound({
       telegramUserId: 7, telegramChatId: 8, telegramMessageId: 9, content: 'hello',
+      replyToTelegramMessageId: 10,
     });
     await leaseOutbox({ limit: 4, leaseSeconds: 30 });
     await completeOutbox({ id: 'outbox-1', leaseToken: 'lease-1', telegramMessageId: 10 });
@@ -133,6 +135,7 @@ describe('Telegram repository', () => {
 
     expect(rpc).toHaveBeenNthCalledWith(1, 'ingest_telegram_inbound', {
       p_telegram_user_id: 7, p_telegram_chat_id: 8, p_telegram_message_id: 9, p_content: 'hello',
+      p_reply_to_telegram_message_id: 10,
     });
     expect(rpc).toHaveBeenNthCalledWith(2, 'lease_telegram_outbox', {
       p_limit: 4, p_lease_seconds: 30,
@@ -220,5 +223,15 @@ describe('Telegram repository', () => {
 
     expect(migration).toMatch(/IF EXISTS \(\s*SELECT 1\s+FROM telegram_relay_log/s);
     expect(migration).toMatch(/telegram_chat_id = p_telegram_chat_id[\s\S]*telegram_message_id = p_telegram_message_id[\s\S]*direction = 'inbound'/);
+  });
+
+  it('exposes the pre-send delivery eligibility RPC', async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+
+    await expect(canSendOutbox({ id: 'outbox-1', leaseToken: 'lease-1' })).resolves.toBe(false);
+    expect(rpc).toHaveBeenCalledWith('can_send_telegram_outbox', {
+      p_id: 'outbox-1',
+      p_lease_token: 'lease-1',
+    });
   });
 });

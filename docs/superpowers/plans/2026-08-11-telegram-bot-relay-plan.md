@@ -147,7 +147,7 @@ For a DIRECT recipient only, enqueue when recipient status is `OFFLINE` or `AWAY
 
 - [ ] **Step 3: Implement worker processing**
 
-Lease rows, call `sendMessage`, mark success with Telegram message ID, or schedule bounded retry/failure. Use safe error codes and never log sensitive payloads.
+Lease rows, revalidate identity/status/settings immediately before calling `sendMessage`, mark success with Telegram message ID and an outbound relay log, or schedule bounded retry/failure. Use safe error codes and never log sensitive payloads. Delivery is at-least-once, not exactly-once, when Telegram accepts a send but completion persistence is uncertain.
 
 - [ ] **Step 4: Add protected worker route**
 

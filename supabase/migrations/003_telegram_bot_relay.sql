@@ -55,6 +55,7 @@ CREATE INDEX idx_telegram_relay_log_conversation
 CREATE TABLE telegram_notification_outbox (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    telegram_user_id BIGINT NOT NULL CHECK (telegram_user_id > 0),
     idempotency_key TEXT NOT NULL UNIQUE,
     telegram_chat_id BIGINT NOT NULL CHECK (telegram_chat_id > 0),
     payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
@@ -100,7 +101,7 @@ BEGIN
     notification_text := left(format('%s: %s', sender_display_name, NEW.content), 4096);
 
     FOR recipient IN
-        SELECT cm.user_id AS profile_id, ti.telegram_chat_id
+        SELECT cm.user_id AS profile_id, ti.telegram_user_id, ti.telegram_chat_id
         FROM conversations c
         JOIN conversation_members cm ON cm.conversation_id = c.id
         JOIN profiles p ON p.id = cm.user_id
@@ -115,15 +116,17 @@ BEGIN
           AND us.telegram_enabled = TRUE
     LOOP
         INSERT INTO telegram_notification_outbox (
-            profile_id, idempotency_key, telegram_chat_id, payload
+            profile_id, telegram_user_id, idempotency_key, telegram_chat_id, payload
         )
         VALUES (
             recipient.profile_id,
+            recipient.telegram_user_id,
             NEW.id::TEXT || ':' || recipient.profile_id::TEXT,
             recipient.telegram_chat_id,
             jsonb_build_object(
                 'message_id', NEW.id,
                 'conversation_id', NEW.conversation_id,
+                'reference', NEW.conversation_id::TEXT,
                 'text', notification_text
             )
         )
@@ -138,6 +141,53 @@ DROP TRIGGER IF EXISTS enqueue_telegram_notification_after_insert ON messages;
 CREATE TRIGGER enqueue_telegram_notification_after_insert
     AFTER INSERT ON messages
     FOR EACH ROW EXECUTE FUNCTION enqueue_telegram_notification();
+
+-- Disable queued deliveries in the same transaction as identity/settings changes.
+-- The worker also revalidates immediately before the external send for rows that
+-- were already leased when the change occurred.
+CREATE OR REPLACE FUNCTION cancel_telegram_outbox_on_identity_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'disconnected' AND OLD.status IS DISTINCT FROM NEW.status THEN
+        UPDATE telegram_notification_outbox
+        SET status = 'failed',
+            last_error_code = 'DELIVERY_DISABLED',
+            lease_token = NULL,
+            leased_until = NULL,
+            updated_at = NOW()
+        WHERE profile_id = NEW.profile_id
+          AND status IN ('pending', 'leased');
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS cancel_telegram_outbox_after_identity_update ON telegram_identities;
+CREATE TRIGGER cancel_telegram_outbox_after_identity_update
+    AFTER UPDATE OF status ON telegram_identities
+    FOR EACH ROW EXECUTE FUNCTION cancel_telegram_outbox_on_identity_change();
+
+CREATE OR REPLACE FUNCTION cancel_telegram_outbox_on_settings_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.telegram_enabled = FALSE AND OLD.telegram_enabled IS DISTINCT FROM NEW.telegram_enabled THEN
+        UPDATE telegram_notification_outbox
+        SET status = 'failed',
+            last_error_code = 'DELIVERY_DISABLED',
+            lease_token = NULL,
+            leased_until = NULL,
+            updated_at = NOW()
+        WHERE profile_id = NEW.user_id
+          AND status IN ('pending', 'leased');
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS cancel_telegram_outbox_after_settings_update ON user_settings;
+CREATE TRIGGER cancel_telegram_outbox_after_settings_update
+    AFTER UPDATE OF telegram_enabled ON user_settings
+    FOR EACH ROW EXECUTE FUNCTION cancel_telegram_outbox_on_settings_change();
 
 ALTER TABLE telegram_link_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_identities ENABLE ROW LEVEL SECURITY;
@@ -254,17 +304,20 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Insert one normal Centras message and its inbound relay log atomically.
--- The most recent direct conversation that has relay activity is the target.
+-- Inbound routing is only allowed through a reply-to outbound message or a
+-- single unambiguous outbound conversation correlation for this Telegram chat.
 CREATE OR REPLACE FUNCTION ingest_telegram_inbound(
     p_telegram_user_id BIGINT,
     p_telegram_chat_id BIGINT,
     p_telegram_message_id BIGINT,
-    p_content TEXT
+    p_content TEXT,
+    p_reply_to_telegram_message_id BIGINT DEFAULT NULL
 )
 RETURNS messages AS $$
 DECLARE
     identity_profile UUID;
     target_conversation UUID;
+    matching_conversations INTEGER;
     inserted_message messages;
 BEGIN
     PERFORM telegram_service_role_only();
@@ -301,37 +354,47 @@ BEGIN
         RETURN inserted_message;
     END IF;
 
-    -- Prefer the direct conversation with the most recent relay activity, not
-    -- the conversation row's timestamp, which can be changed by unrelated UI activity.
-    SELECT c.id INTO target_conversation
-    FROM conversations c
-    JOIN conversation_members cm
-      ON cm.conversation_id = c.id
-     AND cm.user_id = identity_profile
-    JOIN telegram_relay_log rl
-      ON rl.conversation_id = c.id
-     AND rl.profile_id = identity_profile
-    WHERE c.type = 'DIRECT'
-    GROUP BY c.id
-    ORDER BY MAX(rl.created_at) DESC, c.updated_at DESC
-    LIMIT 1;
-
-    -- A linked user may have no relay log yet. In that case route to their
-    -- most recently updated active direct conversation after verifying membership.
-    IF target_conversation IS NULL THEN
-        SELECT c.id INTO target_conversation
-        FROM conversations c
+    SELECT COUNT(*)::INTEGER INTO matching_conversations
+    FROM (
+        SELECT rl.conversation_id
+        FROM telegram_relay_log rl
+        JOIN conversations c ON c.id = rl.conversation_id
         JOIN conversation_members cm
           ON cm.conversation_id = c.id
          AND cm.user_id = identity_profile
-        WHERE c.type = 'DIRECT'
-        ORDER BY c.updated_at DESC
-        LIMIT 1;
+        WHERE rl.profile_id = identity_profile
+          AND rl.telegram_user_id = p_telegram_user_id
+          AND rl.telegram_chat_id = p_telegram_chat_id
+          AND rl.direction = 'outbound'
+          AND (
+              p_reply_to_telegram_message_id IS NULL
+              OR rl.telegram_message_id = p_reply_to_telegram_message_id
+          )
+          AND c.type = 'DIRECT'
+        GROUP BY rl.conversation_id
+    ) correlated;
+
+    IF matching_conversations <> 1 THEN
+        RAISE EXCEPTION 'No safe correlated direct conversation found';
     END IF;
 
-    IF target_conversation IS NULL THEN
-        RAISE EXCEPTION 'No active direct conversation found';
-    END IF;
+    SELECT rl.conversation_id INTO target_conversation
+    FROM telegram_relay_log rl
+    JOIN conversations c ON c.id = rl.conversation_id
+    JOIN conversation_members cm
+      ON cm.conversation_id = c.id
+     AND cm.user_id = identity_profile
+    WHERE rl.profile_id = identity_profile
+      AND rl.telegram_user_id = p_telegram_user_id
+      AND rl.telegram_chat_id = p_telegram_chat_id
+      AND rl.direction = 'outbound'
+      AND (
+          p_reply_to_telegram_message_id IS NULL
+          OR rl.telegram_message_id = p_reply_to_telegram_message_id
+      )
+      AND c.type = 'DIRECT'
+    ORDER BY rl.created_at DESC
+    LIMIT 1;
 
     INSERT INTO messages (conversation_id, sender_id, content, message_type)
     VALUES (target_conversation, identity_profile, p_content, 'TEXT')
@@ -363,17 +426,41 @@ DECLARE
 BEGIN
     PERFORM telegram_service_role_only();
 
+    -- A worker may have accepted a Telegram send and then lost the completion
+    -- response. Once the expired lease has consumed the final attempt, leave a
+    -- terminal record instead of an indefinitely stranded leased row.
+    UPDATE telegram_notification_outbox
+    SET status = 'failed',
+        last_error_code = 'MAX_ATTEMPTS_EXCEEDED',
+        lease_token = NULL,
+        leased_until = NULL,
+        updated_at = NOW()
+    WHERE attempts >= max_attempts
+      AND (
+          status = 'pending'
+          OR (status = 'leased' AND (leased_until IS NULL OR leased_until < NOW()))
+      );
+
     RETURN QUERY
     WITH candidates AS (
-        SELECT id
-        FROM telegram_notification_outbox
-        WHERE attempts < max_attempts
-          AND next_attempt_at <= NOW()
+        SELECT o.id
+        FROM telegram_notification_outbox o
+        JOIN telegram_identities ti
+          ON ti.profile_id = o.profile_id
+         AND ti.telegram_user_id = o.telegram_user_id
+         AND ti.telegram_chat_id = o.telegram_chat_id
+         AND ti.status = 'active'
+        JOIN profiles p ON p.id = o.profile_id
+        JOIN user_settings us ON us.user_id = o.profile_id
+        WHERE o.attempts < o.max_attempts
+          AND o.next_attempt_at <= NOW()
+          AND p.status IN ('OFFLINE', 'AWAY')
+          AND us.telegram_enabled = TRUE
           AND (
-              status = 'pending'
-              OR (status = 'leased' AND leased_until < NOW())
+              o.status = 'pending'
+              OR (o.status = 'leased' AND (o.leased_until IS NULL OR o.leased_until < NOW()))
           )
-        ORDER BY created_at
+        ORDER BY o.created_at
         LIMIT lease_limit
         FOR UPDATE SKIP LOCKED
     )
@@ -389,6 +476,35 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
+-- Recheck all delivery gates after a row is leased and immediately before the
+-- worker calls Telegram. This closes the pending/leased settings race.
+CREATE OR REPLACE FUNCTION can_send_telegram_outbox(
+    p_id UUID,
+    p_lease_token UUID
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    PERFORM telegram_service_role_only();
+
+    RETURN EXISTS (
+        SELECT 1
+        FROM telegram_notification_outbox o
+        JOIN telegram_identities ti
+          ON ti.profile_id = o.profile_id
+         AND ti.telegram_user_id = o.telegram_user_id
+         AND ti.telegram_chat_id = o.telegram_chat_id
+         AND ti.status = 'active'
+        JOIN profiles p ON p.id = o.profile_id
+        JOIN user_settings us ON us.user_id = o.profile_id
+        WHERE o.id = p_id
+          AND o.lease_token = p_lease_token
+          AND o.status = 'leased'
+          AND p.status IN ('OFFLINE', 'AWAY')
+          AND us.telegram_enabled = TRUE
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
 CREATE OR REPLACE FUNCTION complete_telegram_outbox(
     p_id UUID,
     p_lease_token UUID,
@@ -396,7 +512,9 @@ CREATE OR REPLACE FUNCTION complete_telegram_outbox(
 )
 RETURNS BOOLEAN AS $$
 DECLARE
-    completed_id UUID;
+    completed_outbox telegram_notification_outbox;
+    centras_message UUID;
+    target_conversation UUID;
 BEGIN
     PERFORM telegram_service_role_only();
 
@@ -410,9 +528,46 @@ BEGIN
     WHERE id = p_id
       AND status = 'leased'
       AND lease_token = p_lease_token
-    RETURNING id INTO completed_id;
+      AND p_telegram_message_id IS NOT NULL
+    RETURNING * INTO completed_outbox;
 
-    RETURN completed_id IS NOT NULL;
+    IF NOT FOUND THEN
+        RETURN FALSE;
+    END IF;
+
+    BEGIN
+        centras_message := (completed_outbox.payload ->> 'message_id')::UUID;
+        target_conversation := (completed_outbox.payload ->> 'conversation_id')::UUID;
+    EXCEPTION WHEN invalid_text_representation THEN
+        RAISE EXCEPTION 'Outbox payload correlation is invalid';
+    END;
+
+    IF centras_message IS NULL OR target_conversation IS NULL THEN
+        RAISE EXCEPTION 'Outbox payload correlation is missing';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM conversations c
+        JOIN conversation_members cm ON cm.conversation_id = c.id
+        WHERE c.id = target_conversation
+          AND c.type = 'DIRECT'
+          AND cm.user_id = completed_outbox.profile_id
+    ) THEN
+        RAISE EXCEPTION 'Outbox payload conversation is invalid';
+    END IF;
+
+    INSERT INTO telegram_relay_log (
+        profile_id, conversation_id, centras_message_id,
+        telegram_user_id, telegram_chat_id, telegram_message_id, direction
+    )
+    VALUES (
+        completed_outbox.profile_id, target_conversation, centras_message,
+        completed_outbox.telegram_user_id, completed_outbox.telegram_chat_id,
+        p_telegram_message_id, 'outbound'
+    );
+
+    RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
@@ -456,9 +611,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 -- the Supabase JWT role at runtime.
 REVOKE ALL ON FUNCTION claim_telegram_link_token(TEXT, BIGINT, BIGINT, TEXT)
     FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION ingest_telegram_inbound(BIGINT, BIGINT, BIGINT, TEXT)
+REVOKE ALL ON FUNCTION ingest_telegram_inbound(BIGINT, BIGINT, BIGINT, TEXT, BIGINT)
     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION lease_telegram_outbox(INTEGER, INTEGER)
+    FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION can_send_telegram_outbox(UUID, UUID)
     FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION complete_telegram_outbox(UUID, UUID, BIGINT)
     FROM PUBLIC, anon, authenticated;
@@ -467,9 +624,11 @@ REVOKE ALL ON FUNCTION fail_telegram_outbox(UUID, UUID, TEXT, TIMESTAMPTZ)
 
 GRANT EXECUTE ON FUNCTION claim_telegram_link_token(TEXT, BIGINT, BIGINT, TEXT)
     TO service_role;
-GRANT EXECUTE ON FUNCTION ingest_telegram_inbound(BIGINT, BIGINT, BIGINT, TEXT)
+GRANT EXECUTE ON FUNCTION ingest_telegram_inbound(BIGINT, BIGINT, BIGINT, TEXT, BIGINT)
     TO service_role;
 GRANT EXECUTE ON FUNCTION lease_telegram_outbox(INTEGER, INTEGER)
+    TO service_role;
+GRANT EXECUTE ON FUNCTION can_send_telegram_outbox(UUID, UUID)
     TO service_role;
 GRANT EXECUTE ON FUNCTION complete_telegram_outbox(UUID, UUID, BIGINT)
     TO service_role;

@@ -30,7 +30,7 @@ const config = {
   webhookSecret: 'webhook-secret',
   webhookUrl: 'https://example.test/api/telegram/webhook',
   workerSecret: 'worker-secret',
-  retry: { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000 },
+  retry: { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000, maxRetryAfterMs: 300_000 },
 };
 const scope = { actorUserId: 'profile-1', ownerUserId: 'profile-1' };
 

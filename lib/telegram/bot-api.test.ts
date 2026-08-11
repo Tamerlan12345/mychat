@@ -76,6 +76,21 @@ describe('Telegram Bot API', () => {
     });
   });
 
+  it('ignores invalid fractional Retry-After values', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: false, parameters: { retry_after: 1.5 } }), {
+        status: 429,
+        headers: { 'retry-after': 'not-a-duration' },
+      }),
+    );
+    const api = new TelegramBotApi(token, fetchMock);
+
+    await expect(api.sendMessage({ chatId: 123, text: 'hello' })).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: undefined,
+    });
+  });
+
   it.each([
     null,
     { ok: true },

@@ -73,10 +73,11 @@ curl --fail --silent --show-error -X POST "https://<your-host>/api/telegram/work
 Schedule it about once per minute, or more frequently if the deployment and
 Telegram rate limits allow. Each invocation processes a bounded lease batch.
 Do not invoke this endpoint from browser code. A network error, timeout, 429,
-or 5xx response is retried with bounded backoff; permanent Telegram 4xx
-responses fail the row. If Telegram accepted a message but completion cannot
-be persisted, the worker reports an ambiguous result and does not immediately
-schedule a duplicate send.
+or 5xx response is retried with bounded backoff and a capped `Retry-After`;
+permanent Telegram 4xx responses fail the row. Delivery is at-least-once: if
+Telegram accepted a message but completion cannot be persisted, the worker
+reports an ambiguous result and a later recovery may send a duplicate. Do not
+describe this integration as exactly-once.
 
 ## Verify The Webhook
 
@@ -109,10 +110,13 @@ The server stores only a SHA-256 hash of the random token. The link expires in
 The webhook accepts only private chats and sends a short confirmation after the
 database link is committed.
 
-Disconnecting Telegram marks the current identity as `disconnected`; it stops
-new eligible notification rows and prevents inbound relay from that identity.
-Messages already accepted by Telegram or already leased by the worker may
-complete under the normal outbox semantics. Generate a new link to reconnect.
+Disconnecting Telegram marks the current identity as `disconnected` and
+atomically cancels pending and leased rows. The worker revalidates the active
+identity, recipient status, and setting immediately before sending, so a
+disconnected or disabled delivery is not sent. A send already accepted by
+Telegram before the database state changed may still be recorded or be
+duplicated under the at-least-once/DB-uncertainty semantics. Generate a new
+link to reconnect.
 
 ## Rotate The Bot Token
 
@@ -153,10 +157,13 @@ dedicated credentials.
 4. Sign in to Centras Chat and create a Telegram link.
 5. Open the link in Telegram and press Start; confirm the account shows active.
 6. Enable Telegram notifications, set the recipient to `AWAY` or `OFFLINE`, and send a direct message from another account.
-7. Run the worker and confirm the notification arrives once.
-8. Reply with private text in the bot chat and confirm it appears in the linked direct conversation.
-9. Re-deliver the same Telegram update and confirm no duplicate Centras message is created.
-10. Disconnect the account and confirm new notifications and inbound messages are no longer relayed.
+7. Run the worker and confirm the notification arrives; at-least-once delivery
+   means a duplicate is possible if Telegram accepts a send while completion
+   persistence is uncertain.
+8. Reply to the outbound Telegram message with private text and confirm it appears in the correlated direct conversation.
+9. Send an uncorrelated private message and confirm it is safely ignored;
+   re-deliver a correlated update and confirm no duplicate Centras message is created.
+10. Disconnect the account and confirm pending/leased notifications are cancelled and inbound messages are no longer relayed.
 
 These are manual protocol checks. They must not be described as completed in
 project status unless real Supabase and Telegram credentials were used.

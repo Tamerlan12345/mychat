@@ -77,14 +77,15 @@ RLS remains enabled on all new tables. Authenticated users can read their own id
 
 1. A direct message is stored normally.
 2. If the recipient is `OFFLINE` or `AWAY`, has a linked identity, and `user_settings.telegram_enabled` is true, the same server-side operation creates one outbox row.
-3. Worker leases pending rows and calls `sendMessage` with a short sender/content preview and a Centras Chat reference.
-4. HTTP 429/5xx/network errors retry with bounded exponential backoff and `Retry-After` support. Permanent 4xx errors become `failed` and stop retrying.
+3. Worker leases pending rows and calls `sendMessage` with a short sender/content preview and a stable conversation correlation in the outbox payload.
+4. HTTP 429/5xx/network errors retry with bounded exponential backoff and capped `Retry-After` support. Permanent 4xx errors become `failed` and stop retrying.
+5. Successful completion atomically marks the outbox row sent and writes the outbound relay log used for inbound correlation.
 
 ### Inbound flow
 
 1. Webhook accepts private text/caption messages from a linked Telegram identity.
 2. It ignores unsupported chats/media without creating profiles or conversations.
-3. An atomic RPC resolves the most recent relayed direct conversation, verifies membership, inserts a normal `messages` row, and writes one inbound relay log row.
+3. An atomic RPC resolves the direct conversation from the Telegram reply-to outbound message ID, or from a single unambiguous outbound relay-log correlation, verifies membership, inserts a normal `messages` row, and writes one inbound relay log row. Uncorrelated or ambiguous messages are safely rejected rather than routed to an arbitrary coworker.
 4. Existing Supabase Realtime delivers the message to the normal chat UI.
 
 ## Server Modules
@@ -124,7 +125,7 @@ characters; surrounding whitespace is trimmed before it is used.
 - Tokens, bot tokens, service keys, full message text, and Telegram private identifiers are not logged.
 - Webhook parses only private chats and bounded text/caption payloads.
 - Database uniqueness plus atomic RPCs, not a read-then-insert check, enforce idempotency.
-- Worker leases prevent two workers from sending the same pending row concurrently.
+- Worker leases prevent two workers from sending the same pending row concurrently; delivery remains at-least-once, so accepted-send/database uncertainty can produce duplicates and is not exactly-once.
 
 ## Verification
 

@@ -63,15 +63,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getRetryAfterSeconds(payload: unknown, response: Response): number | undefined {
   if (isRecord(payload) && isRecord(payload.parameters)) {
     const retryAfter = payload.parameters.retry_after;
-    if (typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter >= 0) {
-      return Math.floor(retryAfter);
+    if (typeof retryAfter === 'number' && Number.isSafeInteger(retryAfter) && retryAfter >= 0) {
+      return retryAfter;
     }
   }
 
   const retryAfterHeader = response.headers.get('retry-after');
   if (!retryAfterHeader) return undefined;
   const retryAfter = Number(retryAfterHeader);
-  return Number.isFinite(retryAfter) && retryAfter >= 0 ? Math.floor(retryAfter) : undefined;
+  return Number.isSafeInteger(retryAfter) && retryAfter >= 0 ? retryAfter : undefined;
 }
 
 function boundedText(text: string): string {

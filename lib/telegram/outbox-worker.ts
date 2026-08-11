@@ -8,9 +8,11 @@ import {
 import { getTelegramConfig, type TelegramRetryConfig } from './config';
 import {
   completeOutbox,
+  canSendOutbox,
   failOutbox,
   leaseOutbox,
   type CompleteOutboxInput,
+  type CanSendOutboxInput,
   type FailOutboxInput,
   type LeaseOutboxInput,
 } from './repository';
@@ -28,6 +30,7 @@ export interface OutboxWorkerCounts {
 export interface OutboxWorkerDependencies {
   leaseOutbox: (input?: LeaseOutboxInput) => Promise<TelegramNotificationOutbox[]>;
   completeOutbox: (input: CompleteOutboxInput) => Promise<boolean>;
+  canSendOutbox: (input: CanSendOutboxInput) => Promise<boolean>;
   failOutbox: (input: FailOutboxInput) => Promise<boolean>;
   sendTelegramMessage: typeof sendTelegramMessage;
   now?: () => number;
@@ -50,6 +53,7 @@ const MIN_REQUEST_TIMEOUT_MS = 100;
 const defaultDependencies: OutboxWorkerDependencies = {
   leaseOutbox,
   completeOutbox,
+  canSendOutbox,
   failOutbox,
   sendTelegramMessage,
 };
@@ -102,9 +106,12 @@ function retryAtFor(
   random: () => number,
 ): Date {
   const retryAfter = retryAfterSeconds(error);
+  const boundedRetryAfter = retryAfter === undefined
+    ? undefined
+    : Math.min(retryAfter * 1_000, retry.maxRetryAfterMs);
   const delay = retryAfter === undefined
     ? retryDelayMs(row, retry, random)
-    : Math.max(retryAfter * 1_000, retryDelayMs(row, retry, random));
+    : Math.max(boundedRetryAfter ?? 0, retryDelayMs(row, retry, random));
   return new Date(now + delay);
 }
 
@@ -181,6 +188,27 @@ export async function processTelegramOutbox(
     }
 
     let result: Awaited<ReturnType<typeof sendTelegramMessage>>;
+    let eligible: boolean;
+    try {
+      eligible = await dependencies.canSendOutbox({ id: row.id, leaseToken });
+    } catch {
+      // Fail closed if the identity/settings check cannot be completed. The
+      // lease will be reclaimed by the database if this transition is lost.
+      counts.ambiguous += 1;
+      continue;
+    }
+    if (!eligible) {
+      const transitioned = await transitionFailure(dependencies, {
+        id: row.id,
+        leaseToken,
+        errorCode: 'DELIVERY_DISABLED',
+        retryAt: null,
+      });
+      if (transitioned) counts.failed += 1;
+      else counts.ambiguous += 1;
+      continue;
+    }
+
     try {
       result = await dependencies.sendTelegramMessage({
         chatId: row.telegram_chat_id,

@@ -79,6 +79,8 @@ describe('Telegram server configuration', () => {
     expect(DEFAULT_TELEGRAM_RETRY.baseDelayMs).toBeLessThanOrEqual(60_000);
     expect(DEFAULT_TELEGRAM_RETRY.maxDelayMs).toBeGreaterThanOrEqual(DEFAULT_TELEGRAM_RETRY.baseDelayMs);
     expect(DEFAULT_TELEGRAM_RETRY.maxDelayMs).toBeLessThanOrEqual(300_000);
+    expect(DEFAULT_TELEGRAM_RETRY.maxRetryAfterMs).toBeGreaterThan(0);
+    expect(DEFAULT_TELEGRAM_RETRY.maxRetryAfterMs).toBeLessThanOrEqual(300_000);
   });
 
   it('trims and requires a strong worker secret', () => {

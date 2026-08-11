@@ -43,7 +43,7 @@ const config = {
   webhookSecret: 'webhook-secret',
   webhookUrl: 'https://chat.example.com/api/telegram/webhook',
   workerSecret: 'worker-secret',
-  retry: { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000 },
+  retry: { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 60_000, maxRetryAfterMs: 300_000 },
 };
 
 function request(body: unknown, secret = config.webhookSecret): Request {
@@ -212,6 +212,7 @@ describe('Telegram webhook route', () => {
       telegramChatId: 42,
       telegramMessageId: 11,
       content: 'hello from Telegram',
+      replyToTelegramMessageId: null,
     });
   });
 
@@ -252,7 +253,20 @@ describe('Telegram webhook route', () => {
       telegramChatId: 42,
       telegramMessageId: 11,
       content: Object.values(content)[0],
+      replyToTelegramMessageId: null,
     });
+  });
+
+  it('passes Telegram reply-to message IDs for safe outbound correlation', async () => {
+    const response = await POST(request(privateUpdate({
+      text: 'reply',
+      reply_to_message: { message_id: 77 },
+    })));
+
+    expect(response.status).toBe(200);
+    expect(ingestTelegramInbound).toHaveBeenCalledWith(expect.objectContaining({
+      replyToTelegramMessageId: 77,
+    }));
   });
 
   it('ignores captions attached to unsupported media', async () => {
