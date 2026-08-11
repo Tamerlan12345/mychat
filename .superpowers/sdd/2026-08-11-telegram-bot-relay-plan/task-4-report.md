@@ -14,7 +14,7 @@ Complete. Task 4 adds an atomic database-side outbox enqueue trigger, a server-o
 
 ## Commits
 
-- Pending final focused commit.
+- `c428250 feat: add Telegram outbox worker`
 
 ## Tests
 
