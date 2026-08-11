@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const from = vi.fn();
+const mockClient = { from };
 vi.mock('./supabase-client', () => ({
-  getSupabaseClient: () => ({ from }),
+  getSupabaseClient: () => mockClient,
 }));
 
 import { SupabaseDataProvider, mapProfileRow } from './supabase-provider';
@@ -107,5 +108,33 @@ describe('SupabaseDataProvider.sendMessage', () => {
       expect.objectContaining({ conversation_id: 'c1', sender_id: 'u1', content: 'Hello', message_type: 'TEXT' })
     );
     expect(result.id).toBe('m2');
+  });
+});
+
+describe('SupabaseDataProvider.updateBranding', () => {
+  beforeEach(() => from.mockReset());
+
+  it('updates the single branding_config row (id = 1) and broadcasts the change', async () => {
+    const updatedRow = { id: 1, company_name: 'New Co', app_title: 'X', logo_url: '', logo_small_url: '',
+      favicon_url: '', primary_color: '#000', secondary_color: '#111', background_color: '#222',
+      login_background: '', updated_at: '2026-08-10T00:00:00Z' };
+    const single = vi.fn().mockResolvedValue({ data: updatedRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    from.mockReturnValue({ update });
+
+    const send = vi.fn().mockResolvedValue(undefined);
+    const channel = { send, subscribe: vi.fn().mockReturnThis() };
+    const channelFn = vi.fn().mockReturnValue(channel);
+
+    const provider = new SupabaseDataProvider();
+    (provider as any).client.channel = channelFn;
+
+    const result = await provider.updateBranding({ company_name: 'New Co' });
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ company_name: 'New Co' }));
+    expect(eq).toHaveBeenCalledWith('id', 1);
+    expect(result.company_name).toBe('New Co');
   });
 });

@@ -1,5 +1,5 @@
 import { getSupabaseClient } from './supabase-client';
-import { User, Department, Conversation, Message, MessageReaction, Attachment } from '@/types';
+import { User, Department, Conversation, Message, MessageReaction, Attachment, BrandingConfig } from '@/types';
 
 export function mapProfileRow(row: any): User {
   return {
@@ -74,6 +74,21 @@ export function mapConversationRow(row: any): Conversation {
     updated_at: row.updated_at,
     is_private: row.is_private ?? undefined,
     description: row.description ?? undefined,
+  };
+}
+
+function mapBrandingRow(row: any): BrandingConfig {
+  return {
+    company_name: row.company_name,
+    app_title: row.app_title,
+    logo_url: row.logo_url ?? '',
+    logo_small_url: row.logo_small_url ?? '',
+    favicon_url: row.favicon_url ?? '',
+    primary_color: row.primary_color,
+    secondary_color: row.secondary_color,
+    background_color: row.background_color,
+    login_background: row.login_background,
+    updated_at: row.updated_at,
   };
 }
 
@@ -409,6 +424,42 @@ export class SupabaseDataProvider {
           if (inserted) callback(inserted);
         }
       )
+      .subscribe();
+    return () => {
+      this.client.removeChannel(channel);
+    };
+  }
+
+  // --- BRANDING ---
+  async getBranding(): Promise<BrandingConfig> {
+    const { data, error } = await this.client.from('branding_config').select('*').eq('id', 1).single();
+    if (error) throw new Error(`getBranding failed: ${error.message}`);
+    return mapBrandingRow(data);
+  }
+
+  async updateBranding(config: Partial<BrandingConfig>): Promise<BrandingConfig> {
+    const { data, error } = await this.client
+      .from('branding_config')
+      .update({ ...config, updated_at: new Date().toISOString() })
+      .eq('id', 1)
+      .select()
+      .single();
+    if (error) throw new Error(`updateBranding failed: ${error.message}`);
+    const branding = mapBrandingRow(data);
+
+    this.client.channel('branding-updates').send({
+      type: 'broadcast',
+      event: 'branding_changed',
+      payload: branding,
+    });
+
+    return branding;
+  }
+
+  subscribeToBranding(callback: (branding: BrandingConfig) => void): () => void {
+    const channel = this.client
+      .channel('branding-updates')
+      .on('broadcast', { event: 'branding_changed' }, (payload: any) => callback(payload.payload))
       .subscribe();
     return () => {
       this.client.removeChannel(channel);
