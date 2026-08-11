@@ -8,11 +8,11 @@ import {
   Attachment,
   BrandingConfig,
   AuditLog,
-  TelegramAccount,
-  TelegramChat,
-  TelegramMessage,
+  TelegramIdentity,
+  TelegramRelayLog,
   UserStatus
 } from '@/types';
+import type { TelegramLink } from './data-provider';
 
 // Initial Mock Seed State
 const INITIAL_DEPARTMENTS: Department[] = [
@@ -232,20 +232,25 @@ export class MockDataProvider implements IDataProvider {
   private messages: Message[] = [...INITIAL_MESSAGES];
   private branding: BrandingConfig = { ...INITIAL_BRANDING };
   private auditLogs: AuditLog[] = [...INITIAL_AUDIT];
-  private telegramAccountMap: Map<string, TelegramAccount> = new Map();
+  private telegramIdentityMap: Map<string, TelegramIdentity> = new Map();
+  private telegramRelayLogs: TelegramRelayLog[] = [];
+  private nextTelegramLinkToken = 1;
   private messageSubscribers: Map<string, Set<(message: Message) => void>> = new Map();
   private brandingSubscribers: Set<(branding: BrandingConfig) => void> = new Set();
 
   constructor() {
     // Default Telegram mock account for u1
-    this.telegramAccountMap.set('u1', {
-      user_id: 'u1',
-      connected: true,
-      telegram_user_id: '99881122',
+    this.telegramIdentityMap.set('u1', {
+      id: 'telegram-identity-u1',
+      profile_id: 'u1',
+      telegram_user_id: 99881122,
+      telegram_chat_id: 99881122,
       username: 'admin_telegram',
-      phone: '+7 999 000-0001',
-      session_encrypted: true,
-      last_sync: new Date().toISOString(),
+      status: 'active',
+      linked_at: new Date().toISOString(),
+      disconnected_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
   }
 
@@ -596,90 +601,34 @@ export class MockDataProvider implements IDataProvider {
   }
 
   // --- TELEGRAM INTEGRATION ---
-  async getTelegramAccount(userId: string): Promise<TelegramAccount> {
-    const acc = this.telegramAccountMap.get(userId);
-    if (acc) return acc;
+  async createTelegramLink(): Promise<TelegramLink> {
+    const rawToken = `mock-link-${String(this.nextTelegramLinkToken++).padStart(4, '0')}`;
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     return {
-      user_id: userId,
-      connected: false,
-      session_encrypted: false,
-      last_sync: new Date().toISOString(),
+      deepLink: `https://t.me/mock_relay_bot?start=${rawToken}`,
+      expiresAt,
     };
   }
 
-  async connectTelegram(userId: string, phone: string): Promise<TelegramAccount> {
-    const acc: TelegramAccount = {
-      user_id: userId,
-      connected: true,
-      telegram_user_id: 'tg_' + Math.floor(Math.random() * 10000000),
-      username: 'user_tg_' + userId,
-      phone,
-      session_encrypted: true,
-      last_sync: new Date().toISOString(),
-    };
-    this.telegramAccountMap.set(userId, acc);
-    return acc;
+  async getTelegramIdentity(): Promise<TelegramIdentity | null> {
+    const identity = this.telegramIdentityMap.get('u1');
+    return identity ? { ...identity } : null;
   }
 
-  async disconnectTelegram(userId: string): Promise<boolean> {
-    this.telegramAccountMap.delete(userId);
+  async disconnectTelegram(): Promise<boolean> {
+    const identity = this.telegramIdentityMap.get('u1');
+    if (!identity) return true;
+    this.telegramIdentityMap.set('u1', {
+      ...identity,
+      status: 'disconnected',
+      disconnected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
     return true;
   }
 
-  async getTelegramChats(userId: string): Promise<TelegramChat[]> {
-    const acc = await this.getTelegramAccount(userId);
-    if (!acc.connected) return [];
-
-    return [
-      {
-        id: 'tg_c1',
-        title: 'Telegram General Group',
-        type: 'group',
-        unread_count: 3,
-        last_message: 'Встреча в 15:00',
-        last_message_date: new Date().toISOString(),
-      },
-      {
-        id: 'tg_c2',
-        title: 'Pavel Durov News',
-        type: 'channel',
-        unread_count: 0,
-        last_message: 'Telegram Desktop update released',
-        last_message_date: new Date(Date.now() - 3600000).toISOString(),
-      },
-    ];
-  }
-
-  async getTelegramMessages(userId: string, chatId: string): Promise<TelegramMessage[]> {
-    return [
-      {
-        id: 'tg_m1',
-        chat_id: chatId,
-        sender_name: 'Алексей (Telegram)',
-        is_outgoing: false,
-        content: 'Привет! Документ по Telegram User Bridge получен.',
-        date: new Date(Date.now() - 1800000).toISOString(),
-      },
-      {
-        id: 'tg_m2',
-        chat_id: chatId,
-        sender_name: 'Вы',
-        is_outgoing: true,
-        content: 'Отлично! Отправлю обновления прямо из Corporate Chat.',
-        date: new Date(Date.now() - 600000).toISOString(),
-      },
-    ];
-  }
-
-  async sendTelegramMessage(userId: string, chatId: string, content: string): Promise<TelegramMessage> {
-    return {
-      id: `tg_m_${Date.now()}`,
-      chat_id: chatId,
-      sender_name: 'Вы',
-      is_outgoing: true,
-      content,
-      date: new Date().toISOString(),
-    };
+  async getTelegramRelayLogs(limit = 50): Promise<TelegramRelayLog[]> {
+    return this.telegramRelayLogs.slice(0, Math.max(0, Math.min(Math.floor(limit), 100))).map(log => ({ ...log }));
   }
 
   // --- REALTIME SUBSCRIBERS ---

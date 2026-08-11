@@ -1,28 +1,58 @@
 import { getDataProvider } from '@/lib/provider';
-import { TelegramAccount, TelegramChat, TelegramMessage } from '@/types';
+import type { TelegramAccount, TelegramChat, TelegramIdentity, TelegramMessage, TelegramRelayLog } from '@/types';
+import type { TelegramLink } from '@/lib/provider/data-provider';
 
 export class TelegramService {
-  static async getAccountStatus(userId: string): Promise<TelegramAccount> {
-    return getDataProvider().getTelegramAccount(userId);
+  static async createLink(): Promise<TelegramLink> {
+    return getDataProvider().createTelegramLink();
   }
 
-  static async connect(userId: string, phone: string): Promise<TelegramAccount> {
-    return getDataProvider().connectTelegram(userId, phone);
+  static async getAccount(): Promise<TelegramIdentity | null> {
+    return getDataProvider().getTelegramIdentity();
   }
 
-  static async disconnect(userId: string): Promise<boolean> {
-    return getDataProvider().disconnectTelegram(userId);
+  static async disconnect(_userId?: string): Promise<boolean> {
+    return getDataProvider().disconnectTelegram();
   }
 
-  static async getTelegramChats(userId: string): Promise<TelegramChat[]> {
-    return getDataProvider().getTelegramChats(userId);
+  static async getRelayLogs(limit?: number): Promise<TelegramRelayLog[]> {
+    return getDataProvider().getTelegramRelayLogs(limit);
   }
 
-  static async getTelegramMessages(userId: string, chatId: string): Promise<TelegramMessage[]> {
-    return getDataProvider().getTelegramMessages(userId, chatId);
+  // Compatibility shims keep the old, out-of-scope screen compiling without
+  // forwarding profile IDs or exposing the former Telegram inbox operations.
+  static async getAccountStatus(_userId?: string): Promise<TelegramAccount> {
+    const identity = await this.getAccount();
+    return identity
+      ? {
+          user_id: identity.profile_id,
+          connected: identity.status === 'active',
+          telegram_user_id: String(identity.telegram_user_id),
+          username: identity.username ?? undefined,
+          session_encrypted: false,
+          last_sync: identity.updated_at,
+        }
+      : {
+          user_id: '',
+          connected: false,
+          session_encrypted: false,
+          last_sync: new Date().toISOString(),
+        };
   }
 
-  static async sendMessage(userId: string, chatId: string, content: string): Promise<TelegramMessage> {
-    return getDataProvider().sendTelegramMessage(userId, chatId, content);
+  static async connect(_userId: string, _phone: string): Promise<TelegramAccount> {
+    throw new Error('Phone-based Telegram linking is no longer supported.');
+  }
+
+  static async getTelegramChats(_userId?: string): Promise<TelegramChat[]> {
+    return [];
+  }
+
+  static async getTelegramMessages(_userId?: string, _chatId?: string): Promise<TelegramMessage[]> {
+    return [];
+  }
+
+  static async sendMessage(_userId: string, _chatId: string, _content: string): Promise<TelegramMessage> {
+    throw new Error('Telegram inbox messaging is no longer supported.');
   }
 }

@@ -7,12 +7,16 @@ import {
   Attachment,
   BrandingConfig,
   AuditLog,
-  TelegramAccount,
-  TelegramChat,
-  TelegramMessage,
+  TelegramIdentity,
+  TelegramRelayLog,
   UserStatus,
   UserRole
 } from '@/types';
+
+export interface TelegramLink {
+  deepLink: string;
+  expiresAt: string;
+}
 
 export interface IDataProvider {
   // Authentication & Users
@@ -76,12 +80,10 @@ export interface IDataProvider {
   }): Promise<AuditLog>;
 
   // Telegram Integration
-  getTelegramAccount(userId: string): Promise<TelegramAccount>;
-  connectTelegram(userId: string, phone: string): Promise<TelegramAccount>;
-  disconnectTelegram(userId: string): Promise<boolean>;
-  getTelegramChats(userId: string): Promise<TelegramChat[]>;
-  getTelegramMessages(userId: string, chatId: string): Promise<TelegramMessage[]>;
-  sendTelegramMessage(userId: string, chatId: string, content: string): Promise<TelegramMessage>;
+  createTelegramLink(): Promise<TelegramLink>;
+  getTelegramIdentity(): Promise<TelegramIdentity | null>;
+  disconnectTelegram(): Promise<boolean>;
+  getTelegramRelayLogs(limit?: number): Promise<TelegramRelayLog[]>;
 
   // Realtime Subscriptions
   subscribeToMessages(conversationId: string, callback: (message: Message) => void): () => void;
