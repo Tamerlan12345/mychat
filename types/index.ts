@@ -156,3 +156,60 @@ export interface TelegramMessage {
   date: string;
   attachments?: Attachment[];
 }
+
+export type TelegramIdentityStatus = 'active' | 'disconnected';
+export type TelegramRelayDirection = 'inbound' | 'outbound';
+export type TelegramOutboxStatus = 'pending' | 'leased' | 'sent' | 'failed';
+
+export interface TelegramLinkToken {
+  id: string;
+  owner_profile_id: string;
+  token_hash: string;
+  expires_at: string;
+  used_at?: string | null;
+  created_at: string;
+}
+
+export interface TelegramIdentity {
+  id: string;
+  profile_id: string;
+  telegram_user_id: number;
+  telegram_chat_id: number;
+  username?: string | null;
+  status: TelegramIdentityStatus;
+  linked_at: string;
+  disconnected_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TelegramRelayLog {
+  id: string;
+  profile_id: string;
+  conversation_id: string;
+  centras_message_id?: string | null;
+  telegram_user_id: number;
+  telegram_chat_id: number;
+  telegram_message_id?: number | null;
+  direction: TelegramRelayDirection;
+  created_at: string;
+}
+
+export interface TelegramNotificationOutbox {
+  id: string;
+  profile_id: string;
+  idempotency_key: string;
+  telegram_chat_id: number;
+  payload: Record<string, unknown>;
+  status: TelegramOutboxStatus;
+  attempts: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  lease_token?: string | null;
+  leased_until?: string | null;
+  telegram_message_id?: number | null;
+  last_error_code?: string | null;
+  sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
