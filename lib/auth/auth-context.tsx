@@ -3,12 +3,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserStatus } from '@/types';
 import { UserService } from '@/services/user-service';
+import { getAuthProvider } from '@/lib/auth';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   setUserStatus: (status: UserStatus) => Promise<void>;
   isAdmin: boolean;
@@ -31,51 +32,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Restore session from localStorage or load default demo admin
-    const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('corporate_chat_user_id') : null;
-    const initialUserId = storedUserId || 'u1'; // default to admin demo
+    const auth = getAuthProvider();
 
-    UserService.getUserById(initialUserId).then(u => {
-      if (u && u.status !== 'BLOCKED') {
-        setUser(u);
-      } else {
-        localStorage.removeItem('corporate_chat_user_id');
-      }
-      setIsLoading(false);
-    }).catch(() => {
-      setIsLoading(false);
+    auth
+      .getCurrentUserId()
+      .then(async userId => {
+        if (!userId) return;
+        const profile = await UserService.getUserById(userId);
+        if (profile && profile.status !== 'BLOCKED') {
+          setUser(profile);
+        }
+      })
+      .finally(() => setIsLoading(false));
+
+    const unsubscribe = auth.onAuthStateChange(userId => {
+      if (!userId) setUser(null);
     });
+    return () => unsubscribe();
   }, []);
 
-  const login = async (email: string): Promise<{ success: boolean; error?: string }> => {
-    const users = await UserService.getUsers();
-    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (!foundUser) {
-      return { success: false, error: 'Пользователь с таким email не найден.' };
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const auth = getAuthProvider();
+    const result = await auth.signIn(email, password);
+    if (!result.success || !result.userId) {
+      return { success: false, error: result.error };
     }
 
-    if (foundUser.status === 'BLOCKED') {
-      return { success: false, error: 'Ваш аккаунт заблокирован администратором.' };
+    const profile = await UserService.getUserById(result.userId);
+    if (!profile) {
+      return { success: false, error: 'Профиль пользователя не найден.' };
     }
 
-    // Set online status on login
-    const updatedUser = await UserService.setUserStatus(foundUser.id, 'ONLINE');
-    setUser(updatedUser);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('corporate_chat_user_id', updatedUser.id);
-    }
+    const updated = await UserService.setUserStatus(profile.id, 'ONLINE');
+    setUser(updated);
     return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
     if (user) {
-      UserService.setUserStatus(user.id, 'OFFLINE');
+      await UserService.setUserStatus(user.id, 'OFFLINE');
     }
+    await getAuthProvider().signOut();
     setUser(null);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('corporate_chat_user_id');
-    }
   };
 
   const setUserStatus = async (status: UserStatus) => {
@@ -84,21 +82,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(updated);
   };
 
-  const isAdmin = user ? (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') : false;
+  const isAdmin = user ? user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' : false;
   const isSuperAdmin = user ? user.role === 'SUPER_ADMIN' : false;
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        logout,
-        setUserStatus,
-        isAdmin,
-        isSuperAdmin,
-      }}
+      value={{ user, isAuthenticated: !!user, isLoading, login, logout, setUserStatus, isAdmin, isSuperAdmin }}
     >
       {children}
     </AuthContext.Provider>

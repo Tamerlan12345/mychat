@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await login(email);
+      const res = await login(email, password);
       if (res.success) {
         router.push('/chat');
       } else {
