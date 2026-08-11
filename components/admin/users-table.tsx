@@ -92,7 +92,10 @@ export const UsersTable: React.FC = () => {
 
   const handleToggleBlock = async (u: User) => {
     const newStatus = u.status === 'BLOCKED' ? 'OFFLINE' : 'BLOCKED';
-    await UserService.setUserStatus(u.id, newStatus);
+    // Use updateUser (not setUserStatus) so this admin action still writes an
+    // ADMIN_BLOCKED_USER/ADMIN_UPDATED_USER audit entry — setUserStatus is reserved
+    // for unaudited presence changes (login/logout/sidebar status picker).
+    await UserService.updateUser(u.id, { status: newStatus });
     loadData();
   };
 

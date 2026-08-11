@@ -339,8 +339,23 @@ export class MockDataProvider implements IDataProvider {
     return true;
   }
 
+  // Status-only changes (login → ONLINE, logout → OFFLINE, sidebar status picker) are
+  // routine presence updates, not admin activity — apply directly rather than going
+  // through updateUser, so they don't get mislabeled as ADMIN_UPDATED_USER/
+  // ADMIN_BLOCKED_USER audit entries and flood audit_logs. Mirrors the same fix in
+  // SupabaseDataProvider.setUserStatus. Admin block/unblock (users-table.tsx) calls
+  // updateUser directly and still gets audited.
   async setUserStatus(id: string, status: UserStatus): Promise<User> {
-    return this.updateUser(id, { status });
+    const index = this.users.findIndex(u => u.id === id);
+    if (index === -1) throw new Error(`User ${id} not found`);
+
+    this.users[index] = {
+      ...this.users[index],
+      status,
+      updated_at: new Date().toISOString(),
+    };
+
+    return this.users[index];
   }
 
   // --- DEPARTMENTS ---
