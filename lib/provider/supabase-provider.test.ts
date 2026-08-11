@@ -65,3 +65,47 @@ describe('SupabaseDataProvider.getUsers', () => {
     await expect(provider.getUsers()).rejects.toThrow(/connection refused/);
   });
 });
+
+describe('mapMessageRow', () => {
+  it('maps a message row with nested sender and reactions', async () => {
+    const { mapMessageRow } = await import('./supabase-provider');
+    const row = {
+      id: 'm1', conversation_id: 'c1', sender_id: 'u1',
+      profiles: { first_name: 'Иван', last_name: 'Петров', avatar_url: 'a.png' },
+      content: 'Привет', message_type: 'TEXT', reply_to: null,
+      edited_at: null, deleted_at: null, created_at: '2026-08-10T00:00:00Z',
+      message_reactions: [{ id: 'r1', message_id: 'm1', user_id: 'u2', reaction: '👍', created_at: '2026-08-10T00:00:00Z', profiles: { first_name: 'A', last_name: 'B' } }],
+      attachments: [],
+    };
+    const msg = mapMessageRow(row);
+    expect(msg.sender_name).toBe('Иван Петров');
+    expect(msg.reactions?.[0].reaction).toBe('👍');
+  });
+});
+
+describe('SupabaseDataProvider.sendMessage', () => {
+  beforeEach(() => from.mockReset());
+
+  it('inserts into messages with the given fields and returns the mapped row', async () => {
+    const insertedRow = {
+      id: 'm2', conversation_id: 'c1', sender_id: 'u1',
+      profiles: { first_name: 'Иван', last_name: 'Петров', avatar_url: null },
+      content: 'Hello', message_type: 'TEXT', reply_to: undefined,
+      edited_at: null, deleted_at: null, created_at: '2026-08-10T00:00:00Z',
+      message_reactions: [], attachments: [],
+    };
+    const single = vi.fn().mockResolvedValue({ data: insertedRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    from.mockReturnValue({ insert });
+
+    const provider = new SupabaseDataProvider();
+    const result = await provider.sendMessage({ conversation_id: 'c1', sender_id: 'u1', content: 'Hello' });
+
+    expect(from).toHaveBeenCalledWith('messages');
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ conversation_id: 'c1', sender_id: 'u1', content: 'Hello', message_type: 'TEXT' })
+    );
+    expect(result.id).toBe('m2');
+  });
+});
