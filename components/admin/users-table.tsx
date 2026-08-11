@@ -69,14 +69,22 @@ export const UsersTable: React.FC = () => {
         role,
       });
     } else {
-      await UserService.createUser({
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        position,
-        department_id: deptId,
-        role,
-      });
+      try {
+        await UserService.createUser({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          position,
+          department_id: deptId,
+          role,
+        });
+      } catch (err: any) {
+        // In Supabase mode, admin user creation goes through Supabase Auth invite/signup
+        // instead of a direct profile insert — full admin-invite flow is a follow-up,
+        // not silently swallowed here.
+        alert(err.message);
+        return;
+      }
     }
     setIsModalOpen(false);
     loadData();

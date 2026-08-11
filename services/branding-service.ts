@@ -1,17 +1,17 @@
-import { globalDataProvider } from '@/lib/provider/mock-provider';
+import { getDataProvider } from '@/lib/provider';
 import { BrandingConfig } from '@/types';
 
 export class BrandingService {
   static async getBranding(): Promise<BrandingConfig> {
-    return globalDataProvider.getBranding();
+    return getDataProvider().getBranding();
   }
 
   static async updateBranding(config: Partial<BrandingConfig>): Promise<BrandingConfig> {
-    return globalDataProvider.updateBranding(config);
+    return getDataProvider().updateBranding(config);
   }
 
   static subscribeToBranding(callback: (branding: BrandingConfig) => void): () => void {
-    return globalDataProvider.subscribeToBranding(callback);
+    return getDataProvider().subscribeToBranding(callback);
   }
 
   // Inject CSS root variables dynamically for instant White-Label styling

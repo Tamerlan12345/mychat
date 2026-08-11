@@ -1,17 +1,17 @@
-import { globalDataProvider } from '@/lib/provider/mock-provider';
+import { getDataProvider } from '@/lib/provider';
 import { Conversation, Message, MessageReaction, Attachment } from '@/types';
 
 export class ChatService {
   static async getConversations(userId: string): Promise<Conversation[]> {
-    return globalDataProvider.getConversations(userId);
+    return getDataProvider().getConversations(userId);
   }
 
   static async getConversationById(id: string): Promise<Conversation | null> {
-    return globalDataProvider.getConversationById(id);
+    return getDataProvider().getConversationById(id);
   }
 
   static async getMessages(conversationId: string): Promise<Message[]> {
-    return globalDataProvider.getMessages(conversationId);
+    return getDataProvider().getMessages(conversationId);
   }
 
   static async sendMessage(data: {
@@ -22,30 +22,30 @@ export class ChatService {
     reply_to?: string;
     attachments?: Partial<Attachment>[];
   }): Promise<Message> {
-    return globalDataProvider.sendMessage(data);
+    return getDataProvider().sendMessage(data);
   }
 
   static async editMessage(messageId: string, content: string): Promise<Message> {
-    return globalDataProvider.editMessage(messageId, content);
+    return getDataProvider().editMessage(messageId, content);
   }
 
   static async deleteMessage(messageId: string): Promise<boolean> {
-    return globalDataProvider.deleteMessage(messageId);
+    return getDataProvider().deleteMessage(messageId);
   }
 
   static async addReaction(messageId: string, userId: string, reaction: string): Promise<MessageReaction> {
-    return globalDataProvider.addReaction(messageId, userId, reaction);
+    return getDataProvider().addReaction(messageId, userId, reaction);
   }
 
   static async removeReaction(messageId: string, userId: string, reaction: string): Promise<boolean> {
-    return globalDataProvider.removeReaction(messageId, userId, reaction);
+    return getDataProvider().removeReaction(messageId, userId, reaction);
   }
 
   static async markAsRead(conversationId: string, userId: string, messageId: string): Promise<boolean> {
-    return globalDataProvider.markConversationAsRead(conversationId, userId, messageId);
+    return getDataProvider().markConversationAsRead(conversationId, userId, messageId);
   }
 
   static subscribeToMessages(conversationId: string, callback: (message: Message) => void): () => void {
-    return globalDataProvider.subscribeToMessages(conversationId, callback);
+    return getDataProvider().subscribeToMessages(conversationId, callback);
   }
 }

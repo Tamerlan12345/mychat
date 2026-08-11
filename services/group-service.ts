@@ -1,4 +1,4 @@
-import { globalDataProvider } from '@/lib/provider/mock-provider';
+import { getDataProvider } from '@/lib/provider';
 import { Conversation } from '@/types';
 
 export class GroupService {
@@ -10,14 +10,14 @@ export class GroupService {
     is_private?: boolean;
     member_ids: string[];
   }): Promise<Conversation> {
-    return globalDataProvider.createConversation(data);
+    return getDataProvider().createConversation(data);
   }
 
   static async addMembers(conversationId: string, userIds: string[]): Promise<boolean> {
-    return globalDataProvider.addMembers(conversationId, userIds);
+    return getDataProvider().addMembers(conversationId, userIds);
   }
 
   static async removeMember(conversationId: string, userId: string): Promise<boolean> {
-    return globalDataProvider.removeMember(conversationId, userId);
+    return getDataProvider().removeMember(conversationId, userId);
   }
 }

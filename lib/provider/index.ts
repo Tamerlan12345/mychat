@@ -1,3 +1,7 @@
+import type { IDataProvider } from './data-provider';
+import { globalDataProvider } from './mock-provider';
+import { SupabaseDataProvider } from './supabase-provider';
+
 export type ProviderMode = 'mock' | 'supabase';
 
 export function resolveProviderMode(env: Record<string, string | undefined>): ProviderMode {
@@ -10,4 +14,14 @@ export function resolveProviderMode(env: Record<string, string | undefined>): Pr
   throw new Error(
     'Incomplete Supabase configuration: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set together, or neither (to use the mock provider).'
   );
+}
+
+let cachedProvider: IDataProvider | null = null;
+
+export function getDataProvider(): IDataProvider {
+  if (!cachedProvider) {
+    const mode = resolveProviderMode(process.env as Record<string, string | undefined>);
+    cachedProvider = mode === 'supabase' ? new SupabaseDataProvider() : globalDataProvider;
+  }
+  return cachedProvider;
 }
