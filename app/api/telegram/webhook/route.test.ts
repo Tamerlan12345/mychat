@@ -188,6 +188,17 @@ describe('Telegram webhook route', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('ignores an expected identity conflict without exposing database state', async () => {
+    const conflict = new Error('Telegram repository operation failed.') as Error & { code: string };
+    conflict.code = 'CONFLICT';
+    claimTelegramLink.mockRejectedValueOnce(conflict);
+
+    const response = await POST(request(privateUpdate({ text: '/start token-1' })));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).not.toContain('CONFLICT');
+  });
+
   it('acknowledges unknown identities without creating a profile', async () => {
     const repositoryError = new Error('Telegram repository operation failed.') as Error & { code: string };
     repositoryError.code = 'IDENTITY_NOT_LINKED';
@@ -222,6 +233,13 @@ describe('Telegram webhook route', () => {
     expect(claimTelegramLink).not.toHaveBeenCalled();
   });
 
+  it('ignores private updates whose sender and chat identities do not match', async () => {
+    const response = await POST(request(privateUpdate({ from: { id: 43, username: 'other' }, text: 'nope' })));
+
+    expect(response.status).toBe(200);
+    expect(ingestTelegramInbound).not.toHaveBeenCalled();
+  });
+
   it.each([
     { text: 'private text' },
     { caption: 'private caption' },
@@ -235,6 +253,22 @@ describe('Telegram webhook route', () => {
       telegramMessageId: 11,
       content: Object.values(content)[0],
     });
+  });
+
+  it('ignores captions attached to unsupported media', async () => {
+    const response = await POST(request(privateUpdate({ photo: [{ file_id: 'photo-1' }], caption: 'do not relay' })));
+
+    expect(response.status).toBe(200);
+    expect(ingestTelegramInbound).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges a duplicate whose original Centras message was deleted', async () => {
+    ingestTelegramInbound.mockResolvedValueOnce(null);
+
+    const response = await POST(request(privateUpdate({ text: 'duplicate after delete' })));
+
+    expect(response.status).toBe(200);
+    expect(ingestTelegramInbound).toHaveBeenCalledWith(expect.objectContaining({ telegramMessageId: 11 }));
   });
 
   it('returns 500 for database failure before a link commit with a safe body', async () => {

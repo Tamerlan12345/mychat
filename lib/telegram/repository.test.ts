@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 vi.mock('server-only', () => ({}));
 
@@ -212,5 +213,12 @@ describe('Telegram repository', () => {
     expect(error.message).toBe('Telegram repository operation failed.');
     expect(error.message).not.toContain('987654321');
     expect(error.message).not.toContain('secret');
+  });
+
+  it('keeps inbound dedupe independent of the nullable message foreign key', () => {
+    const migration = readFileSync(new URL('../../supabase/migrations/003_telegram_bot_relay.sql', import.meta.url), 'utf8');
+
+    expect(migration).toMatch(/IF EXISTS \(\s*SELECT 1\s+FROM telegram_relay_log/s);
+    expect(migration).toMatch(/telegram_chat_id = p_telegram_chat_id[\s\S]*telegram_message_id = p_telegram_message_id[\s\S]*direction = 'inbound'/);
   });
 });

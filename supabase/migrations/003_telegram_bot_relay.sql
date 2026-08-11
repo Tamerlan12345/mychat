@@ -202,7 +202,6 @@ RETURNS messages AS $$
 DECLARE
     identity_profile UUID;
     target_conversation UUID;
-    existing_message_id UUID;
     inserted_message messages;
 BEGIN
     PERFORM telegram_service_role_only();
@@ -220,14 +219,22 @@ BEGIN
         RAISE EXCEPTION 'Telegram identity is not linked';
     END IF;
 
-    SELECT centras_message_id INTO existing_message_id
-    FROM telegram_relay_log
-    WHERE telegram_chat_id = p_telegram_chat_id
-      AND telegram_message_id = p_telegram_message_id
-      AND direction = 'inbound';
-
-    IF existing_message_id IS NOT NULL THEN
-        SELECT * INTO inserted_message FROM messages WHERE id = existing_message_id;
+    -- The relay-log uniqueness key is the idempotency source. The message FK is
+    -- nullable because deleting a message intentionally sets it to NULL.
+    IF EXISTS (
+        SELECT 1
+        FROM telegram_relay_log
+        WHERE telegram_chat_id = p_telegram_chat_id
+          AND telegram_message_id = p_telegram_message_id
+          AND direction = 'inbound'
+    ) THEN
+        SELECT m.* INTO inserted_message
+        FROM messages m
+        JOIN telegram_relay_log rl ON rl.centras_message_id = m.id
+        WHERE rl.telegram_chat_id = p_telegram_chat_id
+          AND rl.telegram_message_id = p_telegram_message_id
+          AND rl.direction = 'inbound'
+        LIMIT 1;
         RETURN inserted_message;
     END IF;
 

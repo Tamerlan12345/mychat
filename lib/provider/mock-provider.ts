@@ -234,11 +234,15 @@ export class MockDataProvider implements IDataProvider {
   private auditLogs: AuditLog[] = [...INITIAL_AUDIT];
   private telegramIdentityMap: Map<string, TelegramIdentity> = new Map();
   private telegramRelayLogs: TelegramRelayLog[] = [];
+  private telegramLinkTokens: Map<string, { ownerUserId: string; expiresAt: number; used: boolean }> = new Map();
   private nextTelegramLinkToken = 1;
+  private currentUserId: string;
   private messageSubscribers: Map<string, Set<(message: Message) => void>> = new Map();
   private brandingSubscribers: Set<(branding: BrandingConfig) => void> = new Set();
 
-  constructor() {
+  constructor(currentUserId = 'u1') {
+    if (!this.users.some(user => user.id === currentUserId)) throw new Error('Mock user not found');
+    this.currentUserId = currentUserId;
     // Default Telegram mock account for u1
     this.telegramIdentityMap.set('u1', {
       id: 'telegram-identity-u1',
@@ -603,7 +607,9 @@ export class MockDataProvider implements IDataProvider {
   // --- TELEGRAM INTEGRATION ---
   async createTelegramLink(): Promise<TelegramLink> {
     const rawToken = `mock-link-${String(this.nextTelegramLinkToken++).padStart(4, '0')}`;
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const expiresAtMs = Date.now() + 10 * 60 * 1000;
+    const expiresAt = new Date(expiresAtMs).toISOString();
+    this.telegramLinkTokens.set(rawToken, { ownerUserId: this.currentUserId, expiresAt: expiresAtMs, used: false });
     return {
       deepLink: `https://t.me/mock_relay_bot?start=${rawToken}`,
       expiresAt,
@@ -611,14 +617,14 @@ export class MockDataProvider implements IDataProvider {
   }
 
   async getTelegramIdentity(): Promise<TelegramIdentity | null> {
-    const identity = this.telegramIdentityMap.get('u1');
+    const identity = this.telegramIdentityMap.get(this.currentUserId);
     return identity ? { ...identity } : null;
   }
 
   async disconnectTelegram(): Promise<boolean> {
-    const identity = this.telegramIdentityMap.get('u1');
+    const identity = this.telegramIdentityMap.get(this.currentUserId);
     if (!identity) return true;
-    this.telegramIdentityMap.set('u1', {
+    this.telegramIdentityMap.set(this.currentUserId, {
       ...identity,
       status: 'disconnected',
       disconnected_at: new Date().toISOString(),
@@ -628,7 +634,25 @@ export class MockDataProvider implements IDataProvider {
   }
 
   async getTelegramRelayLogs(limit = 50): Promise<TelegramRelayLog[]> {
-    return this.telegramRelayLogs.slice(0, Math.max(0, Math.min(Math.floor(limit), 100))).map(log => ({ ...log }));
+    const boundedLimit = Math.max(0, Math.min(Math.floor(limit), 100));
+    return this.telegramRelayLogs
+      .filter(log => log.profile_id === this.currentUserId)
+      .slice(0, boundedLimit)
+      .map(log => ({ ...log }));
+  }
+
+  setCurrentUser(userId: string): void {
+    if (!this.users.some(user => user.id === userId)) throw new Error('Mock user not found');
+    this.currentUserId = userId;
+  }
+
+  consumeMockTelegramLink(rawToken: string): boolean {
+    const issued = this.telegramLinkTokens.get(rawToken);
+    if (!issued || issued.ownerUserId !== this.currentUserId || issued.used || issued.expiresAt <= Date.now()) {
+      return false;
+    }
+    issued.used = true;
+    return true;
   }
 
   // --- REALTIME SUBSCRIBERS ---

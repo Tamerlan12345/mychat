@@ -612,8 +612,12 @@ export class SupabaseDataProvider implements IDataProvider {
 
   // --- TELEGRAM ---
   async createTelegramLink(): Promise<TelegramLink> {
+    const accessToken = await this.currentTelegramAccessToken();
     try {
-      const response = await fetch('/api/telegram/link', { method: 'POST' });
+      const response = await fetch('/api/telegram/account', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       if (!response.ok) throw new Error('link endpoint rejected the request');
       const data: unknown = await response.json();
       if (
@@ -631,6 +635,13 @@ export class SupabaseDataProvider implements IDataProvider {
     } catch {
       throw new Error('createTelegramLink failed');
     }
+  }
+
+  private async currentTelegramAccessToken(): Promise<string> {
+    const { data, error } = await this.client.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (error || !accessToken) throw new Error('Telegram authentication required');
+    return accessToken;
   }
 
   private async currentTelegramProfileId(): Promise<string> {
@@ -651,17 +662,12 @@ export class SupabaseDataProvider implements IDataProvider {
   }
 
   async disconnectTelegram(): Promise<boolean> {
-    const profileId = await this.currentTelegramProfileId();
-    const { error } = await this.client
-      .from('telegram_identities')
-      .update({
-        status: 'disconnected',
-        disconnected_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('profile_id', profileId)
-      .eq('status', 'active');
-    if (error) throw new Error(`disconnectTelegram failed: ${error.message}`);
+    const accessToken = await this.currentTelegramAccessToken();
+    const response = await fetch('/api/telegram/account', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error('disconnectTelegram failed');
     return true;
   }
 

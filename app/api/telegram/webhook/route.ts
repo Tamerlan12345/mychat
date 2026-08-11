@@ -141,7 +141,8 @@ async function handleWebhook(request: Request): Promise<Response> {
         telegramChatId: chatId,
         username: typeof from.username === 'string' ? from.username : null,
       });
-    } catch {
+    } catch (error) {
+      if (repositoryErrorCode(error) === 'CONFLICT') return safeResponse(200);
       return safeResponse(500);
     }
 
