@@ -115,6 +115,10 @@ RETURNS audit_logs AS $$
 DECLARE
     result audit_logs;
 BEGIN
+    IF p_user_id IS DISTINCT FROM auth.uid() THEN
+        RAISE EXCEPTION 'Cannot log an audit entry for another user';
+    END IF;
+
     INSERT INTO audit_logs (user_id, user_email, action, target_type, target_id, metadata, ip)
     VALUES (p_user_id, p_user_email, p_action, p_target_type, p_target_id, p_metadata, p_ip)
     RETURNING * INTO result;
