@@ -39,3 +39,22 @@ Component tests were not added because the repository has no React component tes
 
 - The brief listed UI files but the repository had no provider settings methods. The provider/mock/service additions were required to make `telegram_enabled` genuinely persistent rather than local-only.
 - Browser-level interaction coverage remains a gap until a component test harness is added.
+
+## Reviewer Fixes
+
+- `MockAuthProvider` now synchronizes `globalDataProvider.setCurrentUser` after sign-in and persisted-session restoration. The auth/provider integration test verifies that a signed-in `u2` cannot read `u1` Telegram identity or settings, and that restoring `u1` switches the provider back.
+- Replaced stale Mautrix, User Bridge, and session-encryption claims in the admin dashboard, system settings, and role matrix with Bot API relay terminology.
+- Telegram account linking now renders an explicit account-loading state while identity status is pending; relay activity keeps its independent loading state.
+- Removed unused phone/inbox service methods, related Telegram types, the dead Supabase account method, and its obsolete test.
+
+## Fix Commit
+
+- `9d96e5e fix: close Telegram relay review findings`
+
+## Fix Verification
+
+- Focused `npx vitest run lib/auth/mock-auth-provider.test.ts lib/provider/telegram-provider.test.ts lib/provider/supabase-provider.test.ts`: 23 passed.
+- Full `npx vitest run`: 139 passed, 5 skipped, 1 file skipped.
+- `npx tsc --noEmit`: passed.
+- `npm run build`: passed.
+- `git diff --check`: passed.
