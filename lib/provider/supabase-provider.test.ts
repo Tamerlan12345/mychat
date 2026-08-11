@@ -138,3 +138,18 @@ describe('SupabaseDataProvider.updateBranding', () => {
     expect(result.company_name).toBe('New Co');
   });
 });
+
+describe('SupabaseDataProvider.getTelegramAccount', () => {
+  beforeEach(() => from.mockReset());
+
+  it('returns a disconnected account when no row exists', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    from.mockReturnValue({ select });
+
+    const provider = new SupabaseDataProvider();
+    const account = await provider.getTelegramAccount('u1');
+    expect(account.connected).toBe(false);
+  });
+});

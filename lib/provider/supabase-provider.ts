@@ -1,5 +1,6 @@
 import { getSupabaseClient } from './supabase-client';
-import { User, Department, Conversation, Message, MessageReaction, Attachment, BrandingConfig, AuditLog } from '@/types';
+import type { IDataProvider } from './data-provider';
+import { User, Department, Conversation, Message, MessageReaction, Attachment, BrandingConfig, AuditLog, TelegramAccount, TelegramChat, TelegramMessage } from '@/types';
 
 export function mapProfileRow(row: any): User {
   return {
@@ -108,7 +109,7 @@ function mapAuditRow(row: any): AuditLog {
 
 const MESSAGE_SELECT = '*, profiles(first_name, last_name, avatar_url), message_reactions(*, profiles(first_name, last_name)), attachments(*)';
 
-export class SupabaseDataProvider {
+export class SupabaseDataProvider implements IDataProvider {
   private get client() {
     return getSupabaseClient();
   }
@@ -520,5 +521,53 @@ export class SupabaseDataProvider {
     });
     if (error) throw new Error(`logAudit failed: ${error.message}`);
     return mapAuditRow(row);
+  }
+
+  // --- TELEGRAM (interim — full relay lands in the Telegram integration plan) ---
+  async getTelegramAccount(userId: string): Promise<TelegramAccount> {
+    const { data, error } = await this.client
+      .from('telegram_accounts')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw new Error(`getTelegramAccount failed: ${error.message}`);
+    if (!data) {
+      return { user_id: userId, connected: false, session_encrypted: false, last_sync: new Date().toISOString() };
+    }
+    return {
+      user_id: data.user_id,
+      connected: data.connected,
+      telegram_user_id: data.telegram_user_id ?? undefined,
+      username: data.username ?? undefined,
+      phone: data.phone ?? undefined,
+      session_encrypted: !!data.session_encrypted,
+      last_sync: data.last_sync,
+    };
+  }
+
+  async connectTelegram(_userId: string, _phone: string): Promise<TelegramAccount> {
+    throw new Error(
+      'connectTelegram: phone-based connect is replaced by the bot deep-link flow — see the Telegram integration plan.'
+    );
+  }
+
+  async disconnectTelegram(userId: string): Promise<boolean> {
+    const { error } = await this.client.from('telegram_accounts').delete().eq('user_id', userId);
+    if (error) throw new Error(`disconnectTelegram failed: ${error.message}`);
+    return true;
+  }
+
+  async getTelegramChats(_userId: string): Promise<TelegramChat[]> {
+    // The "separate Telegram inbox" UI concept goes away with the bot-relay design —
+    // relayed messages appear as normal Centras Chat messages instead. See Plan 5.
+    return [];
+  }
+
+  async getTelegramMessages(_userId: string, _chatId: string): Promise<TelegramMessage[]> {
+    return [];
+  }
+
+  async sendTelegramMessage(_userId: string, _chatId: string, _content: string): Promise<TelegramMessage> {
+    throw new Error('sendTelegramMessage: not available until the Telegram bot-relay plan ships.');
   }
 }
