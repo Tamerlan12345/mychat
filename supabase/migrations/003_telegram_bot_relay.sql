@@ -94,7 +94,7 @@ CREATE POLICY telegram_relay_log_owner_read ON telegram_relay_log
     USING (profile_id = auth.uid());
 
 REVOKE ALL ON telegram_link_tokens, telegram_identities,
-    telegram_relay_log, telegram_notification_outbox FROM anon, authenticated;
+    telegram_relay_log, telegram_notification_outbox FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON telegram_identities, telegram_relay_log TO authenticated;
 GRANT ALL ON telegram_link_tokens, telegram_identities,
     telegram_relay_log, telegram_notification_outbox TO service_role;
