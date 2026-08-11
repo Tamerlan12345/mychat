@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+
 import {
   TelegramBotApi,
   TelegramBotApiError,
@@ -59,6 +61,47 @@ describe('Telegram Bot API', () => {
     expect(error.message).not.toContain(message);
   });
 
+  it('falls back to the Retry-After header when the Telegram payload has no retry_after', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ ok: false }), {
+        status: 429,
+        headers: { 'retry-after': '23' },
+      }),
+    );
+    const api = new TelegramBotApi(token, fetchMock);
+
+    await expect(api.sendMessage({ chatId: 123, text: 'hello' })).rejects.toMatchObject({
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: 23,
+    });
+  });
+
+  it.each([
+    null,
+    { ok: true },
+    { ok: true, result: {} },
+    { ok: true, result: { message_id: '42' } },
+  ])('rejects malformed successful responses: %j', async (payload) => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    const api = new TelegramBotApi(token, fetchMock);
+
+    await expect(api.sendMessage({ chatId: 123, text: 'hello' })).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+    });
+  });
+
+  it.each([
+    { chatId: 0, text: 'hello' },
+    { chatId: '123', text: 'hello' },
+    { chatId: 123, text: '' },
+    { chatId: 123, text: 42 },
+  ])('rejects invalid runtime input without making a request: %j', async (input) => {
+    const api = new TelegramBotApi(token, fetchMock);
+
+    await expect(api.sendMessage(input as never)).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     [500, 'SERVER_ERROR'],
     [400, 'CLIENT_ERROR'],
@@ -84,4 +127,18 @@ describe('Telegram Bot API', () => {
       message: 'Telegram request failed.',
     });
   });
+
+  it.each(['./bot-api', './server-client', './repository'])(
+    'enforces the server-only boundary for %s', async (modulePath) => {
+      vi.stubGlobal('window', {});
+      vi.resetModules();
+
+      try {
+        await expect(import(modulePath)).rejects.toThrow(/server-only/);
+      } finally {
+        vi.unstubAllGlobals();
+        vi.resetModules();
+      }
+    },
+  );
 });

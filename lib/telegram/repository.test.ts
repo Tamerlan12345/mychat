@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('server-only', () => ({}));
+
 const rpc = vi.fn();
 const from = vi.fn();
 const client = { rpc, from };
@@ -19,6 +21,8 @@ import {
   ingestTelegramInbound,
   leaseOutbox,
   TelegramRepositoryError,
+  createTelegramUserScopeFromAuthenticatedActor,
+  type TelegramUserScope,
 } from './repository';
 
 describe('Telegram repository', () => {
@@ -30,11 +34,9 @@ describe('Telegram repository', () => {
   it('persists only the hash when creating a link token', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
     from.mockReturnValue({ insert });
+    const scope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
 
-    const result = await createTelegramLink({
-      ownerProfileId: 'profile-1',
-      expiresAt: '2026-08-11T12:00:00.000Z',
-    });
+    const result = await createTelegramLink(scope, { expiresAt: '2026-08-11T12:00:00.000Z' });
 
     expect(from).toHaveBeenCalledWith('telegram_link_tokens');
     expect(insert).toHaveBeenCalledWith({
@@ -49,7 +51,7 @@ describe('Telegram repository', () => {
   it('calls claim RPC with the migration parameter names', async () => {
     rpc.mockResolvedValue({
       data: [{
-        id: 'identity-1', profile_id: 'profile-1', telegram_user_id: 7,
+        identity_id: 'identity-1', profile_id: 'profile-1', telegram_user_id: 7,
         telegram_chat_id: 8, username: 'relay', status: 'active',
       }],
       error: null,
@@ -68,6 +70,14 @@ describe('Telegram repository', () => {
       p_telegram_chat_id: 8,
       p_username: 'relay',
     });
+  });
+
+  it('normalizes an empty claim RPC result to null', async () => {
+    rpc.mockResolvedValue({ data: [], error: null });
+
+    await expect(claimTelegramLink({
+      tokenHash: 'a'.repeat(64), telegramUserId: 7, telegramChatId: 8,
+    })).resolves.toBeNull();
   });
 
   it('calls inbound and outbox RPCs with exact migration shapes', async () => {
@@ -111,14 +121,15 @@ describe('Telegram repository', () => {
     const statusEq = vi.fn().mockReturnValue({ eq: finalEq });
     const profileEq = vi.fn().mockReturnValue({ eq: statusEq });
     const update = vi.fn().mockReturnValue({ eq: profileEq });
+    const scope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
     from
       .mockReturnValueOnce({ select: identitySelect })
       .mockReturnValueOnce({ select: logSelect })
       .mockReturnValueOnce({ update });
 
-    await getTelegramIdentity('profile-1');
-    await getTelegramRelayLogs('profile-1');
-    await disconnectTelegramIdentity('profile-1');
+    await getTelegramIdentity(scope);
+    await getTelegramRelayLogs(scope);
+    await disconnectTelegramIdentity(scope);
 
     expect(from).toHaveBeenNthCalledWith(1, 'telegram_identities');
     expect(identityEq).toHaveBeenCalledWith('profile_id', 'profile-1');
@@ -129,6 +140,25 @@ describe('Telegram repository', () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'disconnected' }));
     expect(profileEq).toHaveBeenCalledWith('profile_id', 'profile-1');
     expect(statusEq).toHaveBeenCalledWith('status', 'active');
+  });
+
+  it('rejects a cross-profile scope before service-role access', async () => {
+    const ownerScope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
+    const crossProfileScope = {
+      ...ownerScope,
+      ownerUserId: 'profile-2',
+    } as TelegramUserScope;
+
+    await expect(getTelegramIdentity(crossProfileScope)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+    await expect(getTelegramRelayLogs(crossProfileScope)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+    await expect(disconnectTelegramIdentity(crossProfileScope)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+    expect(from).not.toHaveBeenCalled();
   });
 
   it('maps Supabase failures to safe internal codes', async () => {

@@ -1,3 +1,5 @@
+import 'server-only';
+
 import {
   generateTelegramLinkToken,
   hashTelegramLinkToken,
@@ -46,7 +48,6 @@ export class TelegramRepositoryError extends Error {
 }
 
 export interface CreateTelegramLinkInput {
-  ownerProfileId: string;
   expiresAt?: Date | string;
 }
 
@@ -87,13 +88,43 @@ export interface FailOutboxInput {
   retryAt?: Date | string | null;
 }
 
+const TELEGRAM_USER_SCOPE_BRAND = Symbol('TelegramUserScope');
+
+/**
+ * Created after a server auth boundary has established the authenticated actor.
+ * The owner is intentionally bound to that actor; user-scoped repository methods
+ * never accept a caller-provided profile ID.
+ */
+export interface TelegramUserScope {
+  readonly actorUserId: string;
+  readonly ownerUserId: string;
+  readonly [TELEGRAM_USER_SCOPE_BRAND]: true;
+}
+
+export type TelegramClaimedIdentity = Pick<
+  TelegramIdentity,
+  'id' | 'profile_id' | 'telegram_user_id' | 'telegram_chat_id' | 'username' | 'status'
+>;
+
+/** The caller must pass an ID obtained from authenticated server-side context. */
+export function createTelegramUserScopeFromAuthenticatedActor(
+  actorUserId: string,
+): TelegramUserScope {
+  requireText(actorUserId);
+  return Object.freeze({
+    actorUserId,
+    ownerUserId: actorUserId,
+    [TELEGRAM_USER_SCOPE_BRAND]: true as const,
+  });
+}
+
 const LINK_TOKEN_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OUTBOX_LIMIT = 10;
 const MAX_OUTBOX_LIMIT = 100;
 const DEFAULT_LEASE_SECONDS = 60;
 const MAX_LEASE_SECONDS = 3_600;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
@@ -125,8 +156,23 @@ async function safely<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-function requireText(value: string): void {
-  if (!value.trim()) throw new TelegramRepositoryError('INVALID_ARGUMENT');
+function requireText(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TelegramRepositoryError('INVALID_ARGUMENT');
+  }
+}
+
+function ownerProfileIdForScope(scope: TelegramUserScope): string {
+  if (
+    !isRecord(scope) ||
+    scope[TELEGRAM_USER_SCOPE_BRAND] !== true ||
+    typeof scope.actorUserId !== 'string' ||
+    typeof scope.ownerUserId !== 'string' ||
+    scope.actorUserId !== scope.ownerUserId
+  ) {
+    throw new TelegramRepositoryError('INVALID_ARGUMENT');
+  }
+  return scope.ownerUserId;
 }
 
 function toIso(value: Date | string | undefined): string {
@@ -142,9 +188,10 @@ function boundedInteger(value: number | undefined, fallback: number, maximum: nu
 }
 
 export async function createTelegramLink(
-  input: CreateTelegramLinkInput,
+  scope: TelegramUserScope,
+  input: CreateTelegramLinkInput = {},
 ): Promise<CreatedTelegramLink> {
-  requireText(input.ownerProfileId);
+  const ownerProfileId = ownerProfileIdForScope(scope);
   const rawToken = generateTelegramLinkToken();
   const expiresAt = toIso(input.expiresAt);
 
@@ -152,7 +199,7 @@ export async function createTelegramLink(
     const { error } = await getTelegramServerClient()
       .from(TELEGRAM_TABLES.linkTokens)
       .insert({
-        owner_profile_id: input.ownerProfileId,
+        owner_profile_id: ownerProfileId,
         token_hash: hashTelegramLinkToken(rawToken),
         expires_at: expiresAt,
       });
@@ -163,7 +210,7 @@ export async function createTelegramLink(
 
 export async function claimTelegramLink(
   input: ClaimTelegramLinkInput,
-): Promise<TelegramIdentity | null> {
+): Promise<TelegramClaimedIdentity | null> {
   return safely(async () => {
     const { data, error } = await getTelegramServerClient().rpc(TELEGRAM_RPCS.claimLink, {
       p_token_hash: input.tokenHash,
@@ -172,8 +219,27 @@ export async function claimTelegramLink(
       p_username: input.username ?? null,
     });
     if (error) throw repositoryError(error);
-    if (!data) return null;
-    return (Array.isArray(data) ? data[0] : data) as TelegramIdentity | null;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row == null) return null;
+    if (
+      !isRecord(row) ||
+      typeof row.identity_id !== 'string' ||
+      typeof row.profile_id !== 'string' ||
+      typeof row.telegram_user_id !== 'number' ||
+      typeof row.telegram_chat_id !== 'number' ||
+      (row.username !== null && typeof row.username !== 'string') ||
+      (row.status !== 'active' && row.status !== 'disconnected')
+    ) {
+      throw new TelegramRepositoryError('DATABASE_ERROR');
+    }
+    return {
+      id: row.identity_id,
+      profile_id: row.profile_id,
+      telegram_user_id: row.telegram_user_id,
+      telegram_chat_id: row.telegram_chat_id,
+      username: row.username,
+      status: row.status,
+    };
   });
 }
 
@@ -239,13 +305,14 @@ export async function failOutbox(input: FailOutboxInput): Promise<boolean> {
 }
 
 export async function getTelegramIdentity(
-  profileId: string,
+  scope: TelegramUserScope,
 ): Promise<TelegramIdentity | null> {
+  const ownerProfileId = ownerProfileIdForScope(scope);
   return safely(async () => {
     const { data, error } = await getTelegramServerClient()
       .from(TELEGRAM_TABLES.identities)
       .select('*')
-      .eq('profile_id', profileId)
+      .eq('profile_id', ownerProfileId)
       .maybeSingle();
     if (error) throw repositoryError(error);
     return data as TelegramIdentity | null;
@@ -253,15 +320,16 @@ export async function getTelegramIdentity(
 }
 
 export async function getTelegramRelayLogs(
-  profileId: string,
+  scope: TelegramUserScope,
   limit = 50,
 ): Promise<TelegramRelayLog[]> {
+  const ownerProfileId = ownerProfileIdForScope(scope);
   const boundedLimit = boundedInteger(limit, 50, 100);
   return safely(async () => {
     const { data, error } = await getTelegramServerClient()
       .from(TELEGRAM_TABLES.relayLog)
       .select('*')
-      .eq('profile_id', profileId)
+      .eq('profile_id', ownerProfileId)
       .order('created_at', { ascending: false })
       .limit(boundedLimit);
     if (error) throw repositoryError(error);
@@ -269,7 +337,8 @@ export async function getTelegramRelayLogs(
   });
 }
 
-export async function disconnectTelegramIdentity(profileId: string): Promise<void> {
+export async function disconnectTelegramIdentity(scope: TelegramUserScope): Promise<void> {
+  const ownerProfileId = ownerProfileIdForScope(scope);
   return safely(async () => {
     const { error } = await getTelegramServerClient()
       .from(TELEGRAM_TABLES.identities)
@@ -278,7 +347,7 @@ export async function disconnectTelegramIdentity(profileId: string): Promise<voi
         disconnected_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('profile_id', profileId)
+      .eq('profile_id', ownerProfileId)
       .eq('status', 'active');
     if (error) throw repositoryError(error);
   });

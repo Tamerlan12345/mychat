@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { getTelegramConfig } from './config';
 
 if (typeof window !== 'undefined') {

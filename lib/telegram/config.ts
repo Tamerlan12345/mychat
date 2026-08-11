@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { createHash, randomBytes } from 'node:crypto';
 
 // This module contains server credentials and must never be evaluated in a browser bundle.
