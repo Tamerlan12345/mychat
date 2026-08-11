@@ -1,5 +1,5 @@
 import { getSupabaseClient } from './supabase-client';
-import { User, Department, Conversation, Message, MessageReaction, Attachment, BrandingConfig } from '@/types';
+import { User, Department, Conversation, Message, MessageReaction, Attachment, BrandingConfig, AuditLog } from '@/types';
 
 export function mapProfileRow(row: any): User {
   return {
@@ -89,6 +89,20 @@ function mapBrandingRow(row: any): BrandingConfig {
     background_color: row.background_color,
     login_background: row.login_background,
     updated_at: row.updated_at,
+  };
+}
+
+function mapAuditRow(row: any): AuditLog {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    user_email: row.user_email,
+    action: row.action,
+    target_type: row.target_type,
+    target_id: row.target_id ?? undefined,
+    metadata: row.metadata ?? {},
+    ip: row.ip,
+    created_at: row.created_at,
   };
 }
 
@@ -464,5 +478,43 @@ export class SupabaseDataProvider {
     return () => {
       this.client.removeChannel(channel);
     };
+  }
+
+  // --- AUDIT LOGS ---
+  async getAuditLogs(): Promise<AuditLog[]> {
+    const { data, error } = await this.client
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`getAuditLogs failed: ${error.message}`);
+    return (data ?? []).map(mapAuditRow);
+  }
+
+  async logAudit(data: {
+    user_id: string;
+    user_email: string;
+    action: string;
+    target_type: string;
+    target_id?: string;
+    metadata?: Record<string, any>;
+  }): Promise<AuditLog> {
+    let ip = '127.0.0.1';
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/audit-ip');
+        const body = await res.json();
+        ip = body.ip;
+      } catch {
+        // Best-effort — an unreachable IP endpoint shouldn't block the audited action.
+      }
+    }
+
+    const { data: row, error } = await this.client
+      .from('audit_logs')
+      .insert({ ...data, ip })
+      .select()
+      .single();
+    if (error) throw new Error(`logAudit failed: ${error.message}`);
+    return mapAuditRow(row);
   }
 }
