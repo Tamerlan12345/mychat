@@ -17,6 +17,7 @@ const DEMO_USERS = [
   { email: 'admin@demo.local', password: 'password123', first_name: 'Администратор', last_name: 'Системный', role: 'SUPER_ADMIN', department: 'IT', position: 'CTO / Системный Администратор' },
   { email: 'employee1@demo.local', password: 'password123', first_name: 'Иван', last_name: 'Петров', role: 'EMPLOYEE', department: 'AI', position: 'Senior AI Engineer' },
   { email: 'employee2@demo.local', password: 'password123', first_name: 'Анна', last_name: 'Иванова', role: 'ADMIN', department: 'HR', position: 'HR Lead' },
+  { email: 'employee3@demo.local', password: 'password123', first_name: 'Сергей', last_name: 'Смирнов', role: 'EMPLOYEE', department: 'IT', position: 'DevOps Specialist' },
 ];
 
 const DEMO_DEPARTMENTS = [
@@ -59,7 +60,14 @@ async function main() {
   console.log('Seeding branding config...');
   const { error: brandingError } = await supabase
     .from('branding_config')
-    .upsert({ id: 1, company_name: 'Centras Chat', app_title: 'Corporate Messenger' }, { onConflict: 'id' });
+    .upsert({
+      id: 1,
+      company_name: 'Centras Chat',
+      app_title: 'Corporate Messenger MVP',
+      primary_color: '#2563eb',
+      secondary_color: '#475569',
+      background_color: '#0f172a',
+    }, { onConflict: 'id' });
   if (brandingError) throw brandingError;
 
   console.log('Done. Log in with admin@demo.local / password123');
