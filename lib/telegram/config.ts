@@ -1,5 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
 
+// This module contains server credentials and must never be evaluated in a browser bundle.
+if (typeof window !== 'undefined') {
+  throw new Error('Telegram configuration is server-only');
+}
+
 export interface TelegramRetryConfig {
   maxAttempts: number;
   baseDelayMs: number;

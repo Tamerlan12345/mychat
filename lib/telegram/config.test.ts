@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_TELEGRAM_RETRY,
@@ -85,6 +85,18 @@ describe('Telegram server configuration', () => {
           process.env[name] = original[name];
         }
       }
+    }
+  });
+
+  it('fails closed when imported in a browser', async () => {
+    vi.stubGlobal('window', {});
+    vi.resetModules();
+
+    try {
+      await expect(import('./config')).rejects.toThrow(/server-only/);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
     }
   });
 });

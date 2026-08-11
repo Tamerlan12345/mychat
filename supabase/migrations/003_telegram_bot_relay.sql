@@ -231,23 +231,36 @@ BEGIN
         RETURN inserted_message;
     END IF;
 
+    -- Prefer the direct conversation with the most recent relay activity, not
+    -- the conversation row's timestamp, which can be changed by unrelated UI activity.
     SELECT c.id INTO target_conversation
     FROM conversations c
     JOIN conversation_members cm
       ON cm.conversation_id = c.id
      AND cm.user_id = identity_profile
+    JOIN telegram_relay_log rl
+      ON rl.conversation_id = c.id
+     AND rl.profile_id = identity_profile
     WHERE c.type = 'DIRECT'
-      AND EXISTS (
-          SELECT 1
-          FROM telegram_relay_log rl
-          WHERE rl.profile_id = identity_profile
-            AND rl.conversation_id = c.id
-      )
-    ORDER BY c.updated_at DESC
+    GROUP BY c.id
+    ORDER BY MAX(rl.created_at) DESC, c.updated_at DESC
     LIMIT 1;
 
+    -- A linked user may have no relay log yet. In that case route to their
+    -- most recently updated active direct conversation after verifying membership.
     IF target_conversation IS NULL THEN
-        RAISE EXCEPTION 'No relayed direct conversation found';
+        SELECT c.id INTO target_conversation
+        FROM conversations c
+        JOIN conversation_members cm
+          ON cm.conversation_id = c.id
+         AND cm.user_id = identity_profile
+        WHERE c.type = 'DIRECT'
+        ORDER BY c.updated_at DESC
+        LIMIT 1;
+    END IF;
+
+    IF target_conversation IS NULL THEN
+        RAISE EXCEPTION 'No active direct conversation found';
     END IF;
 
     INSERT INTO messages (conversation_id, sender_id, content, message_type)
@@ -274,6 +287,9 @@ CREATE OR REPLACE FUNCTION lease_telegram_outbox(
     p_lease_seconds INTEGER DEFAULT 60
 )
 RETURNS SETOF telegram_notification_outbox AS $$
+DECLARE
+    lease_limit INTEGER := LEAST(GREATEST(COALESCE(p_limit, 10), 1), 100);
+    lease_seconds INTEGER := LEAST(GREATEST(COALESCE(p_lease_seconds, 60), 1), 3600);
 BEGIN
     PERFORM telegram_service_role_only();
 
@@ -288,14 +304,14 @@ BEGIN
               OR (status = 'leased' AND leased_until < NOW())
           )
         ORDER BY created_at
-        LIMIT LEAST(GREATEST(p_limit, 1), 100)
+        LIMIT lease_limit
         FOR UPDATE SKIP LOCKED
     )
     UPDATE telegram_notification_outbox o
     SET status = 'leased',
         attempts = o.attempts + 1,
         lease_token = uuid_generate_v4(),
-        leased_until = NOW() + make_interval(secs => LEAST(GREATEST(p_lease_seconds, 1), 3600)),
+        leased_until = NOW() + make_interval(secs => lease_seconds),
         updated_at = NOW()
     FROM candidates
     WHERE o.id = candidates.id

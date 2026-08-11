@@ -190,7 +190,7 @@ export interface TelegramRelayLog {
   centras_message_id?: string | null;
   telegram_user_id: number;
   telegram_chat_id: number;
-  telegram_message_id?: number | null;
+  telegram_message_id: number;
   direction: TelegramRelayDirection;
   created_at: string;
 }
