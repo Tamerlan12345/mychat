@@ -20,7 +20,7 @@ BEGIN
     );
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
@@ -45,7 +45,7 @@ RETURNS BOOLEAN AS $$
     SELECT EXISTS (
         SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPER_ADMIN')
     );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE;
 
 -- Helper: is the current user a member of the given conversation?
 CREATE OR REPLACE FUNCTION is_conversation_member(conv_id UUID)
@@ -53,7 +53,28 @@ RETURNS BOOLEAN AS $$
     SELECT EXISTS (
         SELECT 1 FROM conversation_members WHERE conversation_id = conv_id AND user_id = auth.uid()
     );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE;
+
+-- Prevent non-admins from escalating their own role or changing their own status inappropriately,
+-- and prevent non-admins from changing another user's status.
+CREATE OR REPLACE FUNCTION prevent_profile_privilege_escalation()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Non-admins cannot change role fields (escalation protection)
+    IF NEW.role IS DISTINCT FROM OLD.role AND NOT is_admin() THEN
+        RAISE EXCEPTION 'Only admins can change role';
+    END IF;
+    -- Non-admins cannot change another user's status
+    IF NEW.status IS DISTINCT FROM OLD.status AND auth.uid() != NEW.id AND NOT is_admin() THEN
+        RAISE EXCEPTION 'Cannot change another user''s status';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+CREATE TRIGGER on_profiles_update
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION prevent_profile_privilege_escalation();
 
 -- 3. Policies.
 
@@ -63,6 +84,7 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 CREATE POLICY profiles_select ON profiles FOR SELECT TO authenticated USING (true);
 CREATE POLICY profiles_update ON profiles FOR UPDATE TO authenticated
     USING (id = auth.uid() OR is_admin());
+CREATE POLICY profiles_admin_insert ON profiles FOR INSERT TO authenticated WITH CHECK (is_admin());
 CREATE POLICY profiles_admin_delete ON profiles FOR DELETE TO authenticated USING (is_admin());
 
 -- departments: readable by all, writable only by admins.
@@ -71,18 +93,28 @@ CREATE POLICY departments_admin_write ON departments FOR ALL TO authenticated
     USING (is_admin()) WITH CHECK (is_admin());
 
 -- conversations: visible/editable only to members (or an admin).
+-- Also allow the creator to see their own conversation (bootstrap).
 CREATE POLICY conversations_member_select ON conversations FOR SELECT TO authenticated
-    USING (is_conversation_member(id) OR is_admin());
+    USING (is_conversation_member(id) OR is_admin() OR created_by = auth.uid());
 CREATE POLICY conversations_authenticated_insert ON conversations FOR INSERT TO authenticated
     WITH CHECK (created_by = auth.uid());
 CREATE POLICY conversations_member_update ON conversations FOR UPDATE TO authenticated
-    USING (is_conversation_member(id) OR is_admin());
+    USING (is_conversation_member(id) OR is_admin())
+    WITH CHECK (is_conversation_member(id) OR is_admin());
 
 -- conversation_members: visible to other members of the same conversation.
+-- Also allow the conversation creator to add themselves as the first member (bootstrap).
 CREATE POLICY members_select ON conversation_members FOR SELECT TO authenticated
     USING (is_conversation_member(conversation_id) OR is_admin());
 CREATE POLICY members_insert ON conversation_members FOR INSERT TO authenticated
-    WITH CHECK (is_conversation_member(conversation_id) OR is_admin());
+    WITH CHECK (
+        is_conversation_member(conversation_id) OR is_admin() OR
+        (
+            user_id = auth.uid() AND
+            EXISTS (SELECT 1 FROM conversations c WHERE c.id = conversation_id AND c.created_by = auth.uid()) AND
+            NOT EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id = conversation_members.conversation_id)
+        )
+    );
 CREATE POLICY members_delete ON conversation_members FOR DELETE TO authenticated
     USING (user_id = auth.uid() OR is_admin());
 
@@ -92,7 +124,8 @@ CREATE POLICY messages_select ON messages FOR SELECT TO authenticated
 CREATE POLICY messages_insert ON messages FOR INSERT TO authenticated
     WITH CHECK (is_conversation_member(conversation_id) AND sender_id = auth.uid());
 CREATE POLICY messages_update_own ON messages FOR UPDATE TO authenticated
-    USING (sender_id = auth.uid());
+    USING (sender_id = auth.uid())
+    WITH CHECK (sender_id = auth.uid() AND is_conversation_member(conversation_id));
 
 -- message_reactions: only conversation members, scoped via the parent message.
 CREATE POLICY reactions_select ON message_reactions FOR SELECT TO authenticated
