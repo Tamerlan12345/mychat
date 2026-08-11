@@ -78,6 +78,67 @@ CREATE INDEX idx_telegram_outbox_pending
 CREATE INDEX idx_telegram_outbox_owner
     ON telegram_notification_outbox(profile_id, created_at DESC);
 
+-- Enqueue outbound notifications in the same transaction as the message. The
+-- trigger derives the recipient and all eligibility fields from database state,
+-- so a browser cannot choose a Telegram destination or forge an outbox row.
+CREATE OR REPLACE FUNCTION enqueue_telegram_notification()
+RETURNS TRIGGER AS $$
+DECLARE
+    recipient RECORD;
+    sender_display_name TEXT;
+    notification_text TEXT;
+BEGIN
+    IF NEW.message_type NOT IN ('TEXT', 'FILE', 'IMAGE') THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT COALESCE(NULLIF(trim(concat_ws(' ', p.first_name, p.last_name)), ''), 'Centras Chat')
+    INTO sender_display_name
+    FROM profiles p
+    WHERE p.id = NEW.sender_id;
+
+    notification_text := left(format('%s: %s', sender_display_name, NEW.content), 4096);
+
+    FOR recipient IN
+        SELECT cm.user_id AS profile_id, ti.telegram_chat_id
+        FROM conversations c
+        JOIN conversation_members cm ON cm.conversation_id = c.id
+        JOIN profiles p ON p.id = cm.user_id
+        JOIN telegram_identities ti
+          ON ti.profile_id = cm.user_id
+         AND ti.status = 'active'
+        JOIN user_settings us ON us.user_id = cm.user_id
+        WHERE c.id = NEW.conversation_id
+          AND c.type = 'DIRECT'
+          AND cm.user_id IS DISTINCT FROM NEW.sender_id
+          AND p.status IN ('OFFLINE', 'AWAY')
+          AND us.telegram_enabled = TRUE
+    LOOP
+        INSERT INTO telegram_notification_outbox (
+            profile_id, idempotency_key, telegram_chat_id, payload
+        )
+        VALUES (
+            recipient.profile_id,
+            NEW.id::TEXT || ':' || recipient.profile_id::TEXT,
+            recipient.telegram_chat_id,
+            jsonb_build_object(
+                'message_id', NEW.id,
+                'conversation_id', NEW.conversation_id,
+                'text', notification_text
+            )
+        )
+        ON CONFLICT (idempotency_key) DO NOTHING;
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS enqueue_telegram_notification_after_insert ON messages;
+CREATE TRIGGER enqueue_telegram_notification_after_insert
+    AFTER INSERT ON messages
+    FOR EACH ROW EXECUTE FUNCTION enqueue_telegram_notification();
+
 ALTER TABLE telegram_link_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_identities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_relay_log ENABLE ROW LEVEL SECURITY;
@@ -110,6 +171,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 REVOKE ALL ON FUNCTION telegram_service_role_only() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION telegram_service_role_only() TO service_role;
+
+REVOKE ALL ON FUNCTION enqueue_telegram_notification() FROM PUBLIC, anon, authenticated;
 
 -- Atomically consume a token and assign its Telegram identity to its owner.
 CREATE OR REPLACE FUNCTION claim_telegram_link_token(
