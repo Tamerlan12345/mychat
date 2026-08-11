@@ -265,7 +265,10 @@ export class SupabaseDataProvider {
     const { error: memberError } = await this.client
       .from('conversation_members')
       .insert(memberIds.map(userId => ({ conversation_id: convRow.id, user_id: userId })));
-    if (memberError) throw new Error(`createConversation (members) failed: ${memberError.message}`);
+    if (memberError) {
+      await this.client.from('conversations').delete().eq('id', convRow.id);
+      throw new Error(`createConversation (members) failed: ${memberError.message}`);
+    }
 
     return mapConversationRow(convRow);
   }
@@ -331,7 +334,7 @@ export class SupabaseDataProvider {
     if (error) throw new Error(`sendMessage failed: ${error.message}`);
 
     if (data.attachments && data.attachments.length > 0) {
-      await this.client.from('attachments').insert(
+      const { error: attachmentError } = await this.client.from('attachments').insert(
         data.attachments.map(att => ({
           message_id: row.id,
           file_name: att.file_name,
@@ -340,6 +343,7 @@ export class SupabaseDataProvider {
           size: att.size,
         }))
       );
+      if (attachmentError) throw new Error(`sendMessage (attachments) failed: ${attachmentError.message}`);
     }
 
     return mapMessageRow(row);
