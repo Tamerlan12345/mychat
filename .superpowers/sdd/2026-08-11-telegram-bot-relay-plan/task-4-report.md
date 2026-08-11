@@ -36,3 +36,72 @@ Complete. Task 4 adds an atomic database-side outbox enqueue trigger, a server-o
 ## Concerns
 
 - The migration must be applied to the Supabase database before production messages can enqueue; an in-flight Telegram request that outlives its lease can still be reclaimed and retried by design.
+
+## Review Fix Report
+
+### Status
+
+Task 4 review findings are addressed in the scoped fix commit `0e21576`. No
+Telegram UI, Redis, browser-side Bot API access, or service-role exposure was
+added.
+
+### Fixes
+
+- `completeOutbox` and `failOutbox` transition results are now checked. A
+  false result or transition exception is reported as `ambiguous` and is not
+  counted as sent, retried, or failed.
+- After Telegram accepts a message, an ambiguous completion never calls
+  `failOutbox`; this prevents the worker from scheduling an immediate resend
+  when durable completion is unknown.
+- Bot API requests now use `AbortController` with a bounded timeout. The
+  worker passes a timeout below the bounded lease duration, including a
+  safety margin, and timeout errors remain safe retryable error codes.
+- The Bot API timeout test verifies abort propagation and the safe `TIMEOUT`
+  error without exposing credentials or message data.
+- `supabase/telegram-outbox.integration.test.ts` is optional and runs only
+  when `SUPABASE_TEST_URL`, `SUPABASE_TEST_SERVICE_ROLE_KEY`, and
+  `SUPABASE_TEST_ANON_KEY` are all present. Without them it emits a clear skip
+  message. The tests cover direct eligibility, `OFFLINE`/`AWAY` behavior,
+  connected/settings-disabled exclusion, trigger-backed atomic enqueue,
+  idempotency, authenticated RLS reads, denied outbox/RPC access, stale lease
+  reclaim/token protection, and concurrent lease exclusion.
+- Worker secrets are trimmed, restricted to URL-safe characters, and require
+  at least 32 characters. The minimum is documented in both the environment
+  example and the Telegram design specification.
+- A leased row without a lease token is never sent or silently marked failed;
+  it is surfaced through the safe `corrupt` worker count and the route returns
+  that count without row data. This keeps the malformed row visible for
+  operator remediation instead of hiding a permanently leased condition.
+
+### Files
+
+- `lib/telegram/outbox-worker.ts`
+- `lib/telegram/outbox-worker.test.ts`
+- `lib/telegram/bot-api.ts`
+- `lib/telegram/bot-api.test.ts`
+- `lib/telegram/config.ts`
+- `lib/telegram/config.test.ts`
+- `app/api/telegram/worker/route.test.ts`
+- `supabase/telegram-outbox.integration.test.ts`
+- `.env.local.example`
+- `docs/superpowers/specs/2026-08-11-telegram-bot-relay-design.md`
+
+### Verification
+
+- `npx vitest run lib/telegram/outbox-worker.test.ts app/api/telegram/worker/route.test.ts lib/telegram/bot-api.test.ts lib/telegram/config.test.ts`: passed, 55 tests.
+- `npx vitest run supabase/telegram-outbox.integration.test.ts`: skipped, 5 tests, because the three optional Supabase test variables were absent.
+- `npm run test`: passed, 15 files, 136 tests; 1 optional file and 5 tests skipped.
+- `npx tsc --noEmit`: passed after the completed build generated `.next/types`.
+- `npm run build`: passed.
+- `git diff --check`: passed with only existing CRLF conversion warnings.
+
+### Self-Review And Concerns
+
+- The database remains the source of truth for lease ownership and transition
+  results; the worker does not infer success from a completed Bot API call.
+- An accepted Telegram send followed by an unavailable completion result is
+  intentionally ambiguous. The row may be reclaimed after lease expiry, so a
+  later duplicate remains possible without a provider-side reconciliation key.
+- The optional integration suite requires a migrated dedicated Supabase
+  project and real test credentials; it was not executed against a live
+  project in this environment.
