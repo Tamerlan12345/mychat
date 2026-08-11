@@ -66,10 +66,14 @@ describe('Telegram outbox worker', () => {
 
     await expect(
       processTelegramOutbox({ limit: 4, leaseSeconds: 30, retry: retryConfig, dependencies: deps }),
-    ).resolves.toEqual({ leased: 1, sent: 1, retried: 0, failed: 0 });
+    ).resolves.toEqual({ leased: 1, sent: 1, retried: 0, failed: 0, ambiguous: 0, corrupt: 0 });
 
     expect(deps.leaseOutbox).toHaveBeenCalledWith({ limit: 4, leaseSeconds: 30 });
-    expect(deps.sendTelegramMessage).toHaveBeenCalledWith({ chatId: 987654321, text: 'Alice: hello' });
+    expect(deps.sendTelegramMessage).toHaveBeenCalledWith({
+      chatId: 987654321,
+      text: 'Alice: hello',
+      timeoutMs: 29_000,
+    });
     expect(deps.completeOutbox).toHaveBeenCalledWith({
       id: 'outbox-1',
       leaseToken: 'lease-1',
@@ -83,7 +87,7 @@ describe('Telegram outbox worker', () => {
 
     await expect(
       processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
-    ).resolves.toEqual({ leased: 1, sent: 0, retried: 1, failed: 0 });
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 1, failed: 0, ambiguous: 0, corrupt: 0 });
 
     expect(deps.failOutbox).toHaveBeenCalledWith(expect.objectContaining({
       id: 'outbox-1',
@@ -123,7 +127,7 @@ describe('Telegram outbox worker', () => {
 
     await expect(
       processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
-    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1 });
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1, ambiguous: 0, corrupt: 0 });
 
     expect(deps.failOutbox).toHaveBeenCalledWith({
       id: 'outbox-1',
@@ -139,7 +143,7 @@ describe('Telegram outbox worker', () => {
 
     await expect(
       processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
-    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1 });
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1, ambiguous: 0, corrupt: 0 });
 
     expect(deps.failOutbox).toHaveBeenCalledWith(expect.objectContaining({
       errorCode: 'NETWORK_ERROR',
@@ -152,7 +156,7 @@ describe('Telegram outbox worker', () => {
 
     await expect(
       processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
-    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1 });
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 1, ambiguous: 0, corrupt: 0 });
 
     expect(deps.sendTelegramMessage).not.toHaveBeenCalled();
     expect(deps.failOutbox).toHaveBeenCalledWith({
@@ -176,12 +180,55 @@ describe('Telegram outbox worker', () => {
     expect(JSON.stringify(deps.failOutbox.mock.calls)).not.toContain('private');
   });
 
+  it('surfaces an ambiguous result when completion is not confirmed', async () => {
+    const deps = dependencies();
+    deps.completeOutbox.mockResolvedValueOnce(false);
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 0, ambiguous: 1, corrupt: 0 });
+
+    expect(deps.failOutbox).not.toHaveBeenCalled();
+  });
+
+  it('does not classify completion persistence errors as Telegram send errors', async () => {
+    const deps = dependencies();
+    deps.completeOutbox.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toMatchObject({ sent: 0, retried: 0, failed: 0, ambiguous: 1, corrupt: 0 });
+
+    expect(deps.failOutbox).not.toHaveBeenCalled();
+  });
+
+  it('surfaces failure-transition persistence errors without claiming a retry', async () => {
+    const deps = dependencies();
+    deps.sendTelegramMessage.mockRejectedValueOnce(new TelegramBotApiError('NETWORK_ERROR'));
+    deps.failOutbox.mockResolvedValueOnce(false);
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 0, ambiguous: 1, corrupt: 0 });
+  });
+
+  it('surfaces a leased row without a lease token as corruption', async () => {
+    const deps = dependencies([row({ lease_token: null })]);
+
+    await expect(
+      processTelegramOutbox({ retry: retryConfig, dependencies: deps }),
+    ).resolves.toEqual({ leased: 1, sent: 0, retried: 0, failed: 0, ambiguous: 0, corrupt: 1 });
+
+    expect(deps.sendTelegramMessage).not.toHaveBeenCalled();
+    expect(deps.failOutbox).not.toHaveBeenCalled();
+  });
+
   it('passes bounded lease arguments and processes reclaimed expired rows', async () => {
     const deps = dependencies([row({ status: 'leased', leased_until: new Date(now - 1).toISOString() })]);
 
     await processTelegramOutbox({ limit: 10_000, leaseSeconds: 10_000, retry: retryConfig, dependencies: deps });
 
-    expect(deps.leaseOutbox).toHaveBeenCalledWith({ limit: 10_000, leaseSeconds: 10_000 });
+    expect(deps.leaseOutbox).toHaveBeenCalledWith({ limit: 10_000, leaseSeconds: 3_600 });
     expect(deps.sendTelegramMessage).toHaveBeenCalledTimes(1);
   });
 

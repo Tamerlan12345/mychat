@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { sendTelegramMessage, TelegramBotApiError } from './bot-api';
+import {
+  DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS,
+  sendTelegramMessage,
+  TelegramBotApiError,
+} from './bot-api';
 import { getTelegramConfig, type TelegramRetryConfig } from './config';
 import {
   completeOutbox,
@@ -17,6 +21,8 @@ export interface OutboxWorkerCounts {
   sent: number;
   retried: number;
   failed: number;
+  ambiguous: number;
+  corrupt: number;
 }
 
 export interface OutboxWorkerDependencies {
@@ -37,6 +43,9 @@ export interface ProcessTelegramOutboxOptions {
 
 const DEFAULT_LIMIT = 10;
 const DEFAULT_LEASE_SECONDS = 60;
+const MAX_LEASE_SECONDS = 3_600;
+const LEASE_TIMEOUT_MARGIN_MS = 1_000;
+const MIN_REQUEST_TIMEOUT_MS = 100;
 
 const defaultDependencies: OutboxWorkerDependencies = {
   leaseOutbox,
@@ -59,7 +68,13 @@ function safeSendErrorCode(error: unknown): string {
 
 function retryable(error: unknown): boolean {
   const code = safeSendErrorCode(error);
-  return code === 'NETWORK_ERROR' || code === 'RATE_LIMITED' || code === 'SERVER_ERROR' || code === 'INVALID_RESPONSE';
+  return (
+    code === 'NETWORK_ERROR' ||
+    code === 'TIMEOUT' ||
+    code === 'RATE_LIMITED' ||
+    code === 'SERVER_ERROR' ||
+    code === 'INVALID_RESPONSE'
+  );
 }
 
 function retryAfterSeconds(error: unknown): number | undefined {
@@ -100,6 +115,30 @@ function payloadText(row: TelegramNotificationOutbox): string | null {
   return row.payload.text;
 }
 
+function boundedLeaseSeconds(value: number | undefined): number {
+  const candidate = value ?? DEFAULT_LEASE_SECONDS;
+  if (!Number.isFinite(candidate)) return DEFAULT_LEASE_SECONDS;
+  return Math.min(Math.max(Math.floor(candidate), 1), MAX_LEASE_SECONDS);
+}
+
+function requestTimeoutMs(leaseSeconds: number): number {
+  return Math.max(
+    MIN_REQUEST_TIMEOUT_MS,
+    Math.min(DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS, leaseSeconds * 1_000 - LEASE_TIMEOUT_MARGIN_MS),
+  );
+}
+
+async function transitionFailure(
+  dependencies: OutboxWorkerDependencies,
+  input: FailOutboxInput,
+): Promise<boolean> {
+  try {
+    return await dependencies.failOutbox(input);
+  } catch {
+    return false;
+  }
+}
+
 export async function processTelegramOutbox(
   options: ProcessTelegramOutboxOptions = {},
 ): Promise<OutboxWorkerCounts> {
@@ -107,43 +146,81 @@ export async function processTelegramOutbox(
   const dependencies = { ...defaultDependencies, ...options.dependencies };
   const now = dependencies.now ?? Date.now;
   const random = dependencies.random ?? Math.random;
+  const leaseSeconds = boundedLeaseSeconds(options.leaseSeconds);
   const rows = await dependencies.leaseOutbox({
     limit: options.limit ?? DEFAULT_LIMIT,
-    leaseSeconds: options.leaseSeconds ?? DEFAULT_LEASE_SECONDS,
+    leaseSeconds,
   });
-  const counts: OutboxWorkerCounts = { leased: rows.length, sent: 0, retried: 0, failed: 0 };
+  const counts: OutboxWorkerCounts = {
+    leased: rows.length,
+    sent: 0,
+    retried: 0,
+    failed: 0,
+    ambiguous: 0,
+    corrupt: 0,
+  };
 
   for (const row of rows) {
     const leaseToken = row.lease_token;
     if (typeof leaseToken !== 'string' || !leaseToken) {
-      counts.failed += 1;
+      counts.corrupt += 1;
       continue;
     }
 
     const text = payloadText(row);
     if (text === null) {
-      await dependencies.failOutbox({ id: row.id, leaseToken, errorCode: 'INVALID_PAYLOAD', retryAt: null });
-      counts.failed += 1;
+      const transitioned = await transitionFailure(dependencies, {
+        id: row.id,
+        leaseToken,
+        errorCode: 'INVALID_PAYLOAD',
+        retryAt: null,
+      });
+      if (transitioned) counts.failed += 1;
+      else counts.ambiguous += 1;
       continue;
     }
 
+    let result: Awaited<ReturnType<typeof sendTelegramMessage>>;
     try {
-      const result = await dependencies.sendTelegramMessage({ chatId: row.telegram_chat_id, text });
-      await dependencies.completeOutbox({
-        id: row.id,
-        leaseToken,
-        telegramMessageId: result.telegramMessageId,
+      result = await dependencies.sendTelegramMessage({
+        chatId: row.telegram_chat_id,
+        text,
+        timeoutMs: requestTimeoutMs(leaseSeconds),
       });
-      counts.sent += 1;
     } catch (error) {
       const errorCode = safeSendErrorCode(error);
       const canRetry = retryable(error) && row.attempts < Math.min(row.max_attempts, retry.maxAttempts);
       const retryAt = canRetry
         ? retryAtFor(row, error, retry, now(), random)
         : null;
-      await dependencies.failOutbox({ id: row.id, leaseToken, errorCode, retryAt });
-      if (canRetry) counts.retried += 1;
-      else counts.failed += 1;
+      const transitioned = await transitionFailure(dependencies, {
+        id: row.id,
+        leaseToken,
+        errorCode,
+        retryAt,
+      });
+      if (!transitioned) {
+        counts.ambiguous += 1;
+      } else if (canRetry) {
+        counts.retried += 1;
+      } else {
+        counts.failed += 1;
+      }
+      continue;
+    }
+
+    try {
+      const completed = await dependencies.completeOutbox({
+        id: row.id,
+        leaseToken,
+        telegramMessageId: result.telegramMessageId,
+      });
+      if (completed) counts.sent += 1;
+      else counts.ambiguous += 1;
+    } catch {
+      // Telegram accepted the send, but durable completion is unknown. Never
+      // call failOutbox here because that could schedule a duplicate send.
+      counts.ambiguous += 1;
     }
   }
 

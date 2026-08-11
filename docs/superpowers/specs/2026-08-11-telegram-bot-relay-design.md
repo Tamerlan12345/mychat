@@ -112,6 +112,9 @@ TELEGRAM_WEBHOOK_URL=
 TELEGRAM_WORKER_SECRET=
 ```
 
+`TELEGRAM_WORKER_SECRET` must be a dedicated URL-safe value of at least 32
+characters; surrounding whitespace is trimmed before it is used.
+
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` remain unchanged. No Telegram secret uses the `NEXT_PUBLIC_` prefix.
 
 ## Error Handling And Security

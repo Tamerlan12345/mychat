@@ -30,6 +30,10 @@ export const DEFAULT_TELEGRAM_RETRY: Readonly<TelegramRetryConfig> = Object.free
   maxDelayMs: 60_000,
 });
 
+// Worker authentication requires a dedicated URL-safe secret of at least 32
+// characters; shorter values are too easy to guess or accidentally reuse.
+export const MIN_TELEGRAM_WORKER_SECRET_LENGTH = 32;
+
 const REQUIRED_VARIABLES = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'TELEGRAM_BOT_TOKEN',
@@ -52,13 +56,23 @@ export function parseTelegramConfig(
     throw new Error('Invalid TELEGRAM_WEBHOOK_SECRET');
   }
 
+  const workerSecret = env.TELEGRAM_WORKER_SECRET?.trim() ?? '';
+  if (
+    workerSecret.length < MIN_TELEGRAM_WORKER_SECRET_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/.test(workerSecret)
+  ) {
+    throw new Error(
+      `TELEGRAM_WORKER_SECRET must contain at least ${MIN_TELEGRAM_WORKER_SECRET_LENGTH} URL-safe characters`,
+    );
+  }
+
   return {
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY as string,
     botToken: env.TELEGRAM_BOT_TOKEN as string,
     botUsername: env.TELEGRAM_BOT_USERNAME as string,
     webhookSecret,
     webhookUrl: env.TELEGRAM_WEBHOOK_URL as string,
-    workerSecret: env.TELEGRAM_WORKER_SECRET as string,
+    workerSecret,
     retry: DEFAULT_TELEGRAM_RETRY,
   };
 }

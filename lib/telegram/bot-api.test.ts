@@ -128,6 +128,26 @@ describe('Telegram Bot API', () => {
     });
   });
 
+  it('aborts a request at its bounded timeout and returns a safe timeout error', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    }));
+    const api = new TelegramBotApi(token);
+    const requestPromise = api.sendMessage({ chatId: 123, text: 'secret text', timeoutMs: 100 });
+    const errorPromise = requestPromise.catch(error => error);
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const error = await errorPromise;
+    expect(error).toMatchObject({
+      code: 'TIMEOUT',
+      message: 'Telegram request timed out.',
+    });
+    expect(error.message).not.toContain(token);
+    vi.useRealTimers();
+  });
+
   it.each(['./bot-api', './server-client', './repository'])(
     'enforces the server-only boundary for %s', async (modulePath) => {
       vi.stubGlobal('window', {});

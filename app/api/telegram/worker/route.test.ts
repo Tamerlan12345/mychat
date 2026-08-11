@@ -30,7 +30,9 @@ function request(method = 'POST', secret?: string): Request {
 
 beforeEach(() => {
   getTelegramConfig.mockReset().mockReturnValue(config);
-  processTelegramOutbox.mockReset().mockResolvedValue({ leased: 2, sent: 1, retried: 1, failed: 0 });
+  processTelegramOutbox.mockReset().mockResolvedValue({
+    leased: 2, sent: 1, retried: 1, failed: 0, ambiguous: 0, corrupt: 0,
+  });
 });
 
 describe('Telegram worker route', () => {
@@ -63,7 +65,24 @@ describe('Telegram worker route', () => {
     const response = await POST(request('POST', config.workerSecret));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ leased: 2, sent: 1, retried: 1, failed: 0 });
+    expect(await response.json()).toEqual({
+      leased: 2, sent: 1, retried: 1, failed: 0, ambiguous: 0, corrupt: 0,
+    });
     expect(processTelegramOutbox).toHaveBeenCalledWith({ retry: config.retry });
+  });
+
+  it('surfaces ambiguous and corrupt rows without exposing row data', async () => {
+    processTelegramOutbox.mockResolvedValueOnce({
+      leased: 2, sent: 0, retried: 0, failed: 0, ambiguous: 1, corrupt: 1,
+    });
+
+    const response = await POST(request('POST', config.workerSecret));
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(JSON.parse(body)).toEqual({
+      leased: 2, sent: 0, retried: 0, failed: 0, ambiguous: 1, corrupt: 1,
+    });
+    expect(body).not.toContain('lease_token');
   });
 });

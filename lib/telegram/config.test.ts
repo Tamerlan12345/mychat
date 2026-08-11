@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import {
   DEFAULT_TELEGRAM_RETRY,
+  MIN_TELEGRAM_WORKER_SECRET_LENGTH,
   generateTelegramLinkToken,
   getTelegramConfig,
   hashTelegramLinkToken,
@@ -16,7 +17,7 @@ const validEnvironment = {
   TELEGRAM_BOT_USERNAME: 'relay_bot',
   TELEGRAM_WEBHOOK_SECRET: 'valid_secret-123',
   TELEGRAM_WEBHOOK_URL: 'https://chat.example.com/api/telegram/webhook',
-  TELEGRAM_WORKER_SECRET: 'worker-secret',
+  TELEGRAM_WORKER_SECRET: 'w'.repeat(32),
 };
 
 describe('Telegram server configuration', () => {
@@ -35,7 +36,7 @@ describe('Telegram server configuration', () => {
       botUsername: 'relay_bot',
       webhookSecret: 'valid_secret-123',
       webhookUrl: 'https://chat.example.com/api/telegram/webhook',
-      workerSecret: 'worker-secret',
+       workerSecret: 'w'.repeat(32),
       retry: DEFAULT_TELEGRAM_RETRY,
     });
   });
@@ -60,6 +61,16 @@ describe('Telegram server configuration', () => {
     expect(DEFAULT_TELEGRAM_RETRY.baseDelayMs).toBeLessThanOrEqual(60_000);
     expect(DEFAULT_TELEGRAM_RETRY.maxDelayMs).toBeGreaterThanOrEqual(DEFAULT_TELEGRAM_RETRY.baseDelayMs);
     expect(DEFAULT_TELEGRAM_RETRY.maxDelayMs).toBeLessThanOrEqual(300_000);
+  });
+
+  it('trims and requires a strong worker secret', () => {
+    const paddedSecret = `  ${'s'.repeat(MIN_TELEGRAM_WORKER_SECRET_LENGTH)}  `;
+    const config = parseTelegramConfig({ ...validEnvironment, TELEGRAM_WORKER_SECRET: paddedSecret });
+
+    expect(config.workerSecret).toBe('s'.repeat(MIN_TELEGRAM_WORKER_SECRET_LENGTH));
+    expect(() => parseTelegramConfig({ ...validEnvironment, TELEGRAM_WORKER_SECRET: 'too-short' })).toThrow(
+      new RegExp(`${MIN_TELEGRAM_WORKER_SECRET_LENGTH}`),
+    );
   });
 
   it('generates a URL-safe raw token and persists only its SHA-256 hash', () => {

@@ -7,6 +7,9 @@ if (typeof window !== 'undefined') {
 }
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
+export const DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS = 30_000;
+const MIN_TELEGRAM_REQUEST_TIMEOUT_MS = 100;
+const MAX_TELEGRAM_REQUEST_TIMEOUT_MS = 55_000;
 
 export type TelegramBotApiErrorCode =
   | 'INVALID_REQUEST'
@@ -14,6 +17,7 @@ export type TelegramBotApiErrorCode =
   | 'SERVER_ERROR'
   | 'CLIENT_ERROR'
   | 'NETWORK_ERROR'
+  | 'TIMEOUT'
   | 'INVALID_RESPONSE'
   | 'TELEGRAM_ERROR';
 
@@ -21,6 +25,7 @@ export interface TelegramSendMessageInput {
   chatId: number;
   text: string;
   disableWebPagePreview?: boolean;
+  timeoutMs?: number;
 }
 
 export interface TelegramSendMessageResult {
@@ -44,6 +49,7 @@ const TELEGRAM_ERROR_MESSAGES: Record<TelegramBotApiErrorCode, string> = {
   SERVER_ERROR: 'Telegram service is temporarily unavailable.',
   CLIENT_ERROR: 'Telegram rejected the request.',
   NETWORK_ERROR: 'Telegram request failed.',
+  TIMEOUT: 'Telegram request timed out.',
   INVALID_RESPONSE: 'Telegram returned an invalid response.',
   TELEGRAM_ERROR: 'Telegram rejected the request.',
 };
@@ -76,6 +82,7 @@ export class TelegramBotApi {
   constructor(
     private readonly botToken: string,
     private readonly fetchImpl: FetchLike = fetch,
+    private readonly timeoutMs = DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS,
   ) {}
 
   async sendMessage(input: TelegramSendMessageInput): Promise<TelegramSendMessageResult> {
@@ -97,54 +104,66 @@ export class TelegramBotApi {
       body.disable_web_page_preview = input.disableWebPagePreview;
     }
 
-    let response: Response;
+    const controller = new AbortController();
+    const timeoutMs = Math.min(
+      Math.max(Math.floor(input.timeoutMs ?? this.timeoutMs), MIN_TELEGRAM_REQUEST_TIMEOUT_MS),
+      MAX_TELEGRAM_REQUEST_TIMEOUT_MS,
+    );
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      response = await this.fetchImpl(
+      const response = await this.fetchImpl(
         `https://api.telegram.org/bot${this.botToken}/sendMessage`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
+          signal: controller.signal,
         },
       );
-    } catch {
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        if (controller.signal.aborted) throw new TelegramBotApiError('TIMEOUT');
+        payload = null;
+      }
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new TelegramBotApiError(
+            'RATE_LIMITED',
+            response.status,
+            getRetryAfterSeconds(payload, response),
+          );
+        }
+        if (response.status >= 500) {
+          throw new TelegramBotApiError('SERVER_ERROR', response.status);
+        }
+        if (response.status >= 400) {
+          throw new TelegramBotApiError('CLIENT_ERROR', response.status);
+        }
+        throw new TelegramBotApiError('TELEGRAM_ERROR', response.status);
+      }
+
+      if (!isRecord(payload) || payload.ok !== true || !isRecord(payload.result)) {
+        throw new TelegramBotApiError('INVALID_RESPONSE', response.status);
+      }
+
+      const messageId = payload.result.message_id;
+      if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) {
+        throw new TelegramBotApiError('INVALID_RESPONSE', response.status);
+      }
+
+      return { telegramMessageId: messageId };
+    } catch (error) {
+      if (error instanceof TelegramBotApiError) throw error;
+      if (controller.signal.aborted) throw new TelegramBotApiError('TIMEOUT');
       throw new TelegramBotApiError('NETWORK_ERROR');
+    } finally {
+      clearTimeout(timeout);
     }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
-    }
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        throw new TelegramBotApiError(
-          'RATE_LIMITED',
-          response.status,
-          getRetryAfterSeconds(payload, response),
-        );
-      }
-      if (response.status >= 500) {
-        throw new TelegramBotApiError('SERVER_ERROR', response.status);
-      }
-      if (response.status >= 400) {
-        throw new TelegramBotApiError('CLIENT_ERROR', response.status);
-      }
-      throw new TelegramBotApiError('TELEGRAM_ERROR', response.status);
-    }
-
-    if (!isRecord(payload) || payload.ok !== true || !isRecord(payload.result)) {
-      throw new TelegramBotApiError('INVALID_RESPONSE', response.status);
-    }
-
-    const messageId = payload.result.message_id;
-    if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) {
-      throw new TelegramBotApiError('INVALID_RESPONSE', response.status);
-    }
-
-    return { telegramMessageId: messageId };
   }
 }
 
@@ -154,12 +173,12 @@ export function sendTelegramMessage(
 export function sendTelegramMessage(
   chatId: number,
   text: string,
-  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview'>,
+  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview' | 'timeoutMs'>,
 ): Promise<TelegramSendMessageResult>;
 export function sendTelegramMessage(
   inputOrChatId: TelegramSendMessageInput | number,
   text?: string,
-  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview'>,
+  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview' | 'timeoutMs'>,
 ): Promise<TelegramSendMessageResult> {
   const input =
     typeof inputOrChatId === 'number'
@@ -174,12 +193,12 @@ export function sendMessage(
 export function sendMessage(
   chatId: number,
   text: string,
-  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview'>,
+  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview' | 'timeoutMs'>,
 ): Promise<TelegramSendMessageResult>;
 export function sendMessage(
   inputOrChatId: TelegramSendMessageInput | number,
   text?: string,
-  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview'>,
+  options?: Pick<TelegramSendMessageInput, 'disableWebPagePreview' | 'timeoutMs'>,
 ): Promise<TelegramSendMessageResult> {
   return typeof inputOrChatId === 'number'
     ? sendTelegramMessage(inputOrChatId, text ?? '', options)
