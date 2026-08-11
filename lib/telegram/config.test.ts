@@ -54,6 +54,24 @@ describe('Telegram server configuration', () => {
     ).not.toThrow();
   });
 
+  it('normalizes a bot username and requires an HTTPS webhook URL', () => {
+    const config = parseTelegramConfig({ ...validEnvironment, TELEGRAM_BOT_USERNAME: '@relay_bot' });
+
+    expect(config.botUsername).toBe('relay_bot');
+    expect(() => parseTelegramConfig({ ...validEnvironment, TELEGRAM_WEBHOOK_URL: 'http://chat.example.com/webhook' })).toThrow(
+      /HTTPS URL/,
+    );
+  });
+
+  it('rejects unsafe bot usernames and webhook URL credentials', () => {
+    expect(() => parseTelegramConfig({ ...validEnvironment, TELEGRAM_BOT_USERNAME: 'relay/bot' })).toThrow(
+      /TELEGRAM_BOT_USERNAME/,
+    );
+    expect(() => parseTelegramConfig({ ...validEnvironment, TELEGRAM_WEBHOOK_URL: 'https://user:pass@chat.example.com/webhook' })).toThrow(
+      /HTTPS URL/,
+    );
+  });
+
   it('keeps retry defaults bounded', () => {
     expect(DEFAULT_TELEGRAM_RETRY.maxAttempts).toBeGreaterThan(0);
     expect(DEFAULT_TELEGRAM_RETRY.maxAttempts).toBeLessThanOrEqual(10);

@@ -14,6 +14,12 @@ Project → SQL Editor → New query. Paste and run, in this exact order:
 
 1. The full contents of `supabase/migrations/001_initial_schema.sql`
 2. The full contents of `supabase/migrations/002_auth_and_rls.sql`
+3. The full contents of `supabase/migrations/003_telegram_bot_relay.sql`
+
+Apply `003_telegram_bot_relay.sql` only after `001` and `002`. It creates the
+Bot API link, identity, relay-log, and notification-outbox tables plus the
+service-role-only RPCs used by the webhook and worker. Do not rewrite the
+already-applied migrations in a production project.
 
 Migration 002 also adds the `messages` table to the `supabase_realtime` publication
 (`ALTER PUBLICATION supabase_realtime ADD TABLE messages;`) — this is required for
@@ -36,7 +42,19 @@ Copy `.env.local.example` to `.env.local` and fill in:
 NEXT_PUBLIC_SUPABASE_URL=<your project URL>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your anon public key>
 SUPABASE_SERVICE_ROLE_KEY=<your service_role key>
+
+# Required for Telegram Bot API relay; see docs/TELEGRAM_SETUP.md.
+TELEGRAM_BOT_TOKEN=<BotFather token>
+TELEGRAM_BOT_USERNAME=<bot username>
+TELEGRAM_WEBHOOK_SECRET=<Telegram webhook secret>
+TELEGRAM_WEBHOOK_URL=https://<your-host>/api/telegram/webhook
+TELEGRAM_WORKER_SECRET=<dedicated URL-safe secret, at least 32 characters>
 ```
+
+Keep `SUPABASE_SERVICE_ROLE_KEY` and all `TELEGRAM_*` values server-side. None
+of them may use a `NEXT_PUBLIC_` prefix or be committed to tracked files. The
+webhook URL must be HTTPS. The worker secret is sent only in the
+`X-Worker-Secret` header by a trusted scheduler.
 
 Restart `npm run dev` after editing this file — Next.js only reads it on startup.
 
@@ -52,8 +70,18 @@ Creates the same four demo accounts the mock provider ships with (`admin@demo.lo
 
 `npm run dev`, log in as `admin@demo.local` / `password123`. You should see the seeded departments in Admin → Users, and messages you send should still be there after a full page refresh (proof it's really persisted, not the in-memory mock).
 
+## 7. Telegram relay setup
+
+Complete BotFather setup, webhook registration, worker scheduling, safe
+troubleshooting, token rotation, and manual relay checks in
+[`docs/TELEGRAM_SETUP.md`](TELEGRAM_SETUP.md). The Telegram setup guide also
+documents the optional destructive integration-test environment and its exact
+confirmation guard.
+
 ## Known limitations at this stage
 
 - Admin "create user" in the UI is not yet wired to Supabase Auth invite flow (throws with a clear message) — creating additional real users currently requires the seed script or the Supabase dashboard directly. This is called out as a follow-up, not a hidden gap.
-- File upload/download, audio/video calls, and the real Telegram integration are separate plans layered on top of this one — this guide only covers the backend foundation (auth, data, realtime).
+- File upload/download and audio/video calls are separate plans layered on top of this one.
+- Telegram supports Bot API linking, direct-message notifications, and private-text inbound relay only. Phone login, Mautrix, MTProto, personal Telegram inboxes, group synchronization, and media relay are not supported.
+- Live Supabase and Telegram verification is not claimed unless dedicated credentials are available; the automated test suite skips the destructive Supabase integration test otherwise.
 - Admin audit log page (`/admin/audit`) still reads mock data instead of Supabase-backed audit logs — pending a follow-up `AuditService` integration.

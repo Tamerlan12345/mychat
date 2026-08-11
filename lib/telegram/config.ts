@@ -56,6 +56,26 @@ export function parseTelegramConfig(
     throw new Error('Invalid TELEGRAM_WEBHOOK_SECRET');
   }
 
+  const botUsername = env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, '') ?? '';
+  if (!/^[A-Za-z0-9_]{1,64}$/.test(botUsername)) {
+    throw new Error('Invalid TELEGRAM_BOT_USERNAME');
+  }
+
+  const webhookUrl = env.TELEGRAM_WEBHOOK_URL?.trim() ?? '';
+  try {
+    const parsedWebhookUrl = new URL(webhookUrl);
+    if (
+      parsedWebhookUrl.protocol !== 'https:' ||
+      parsedWebhookUrl.username ||
+      parsedWebhookUrl.password ||
+      parsedWebhookUrl.hash
+    ) {
+      throw new Error('invalid webhook URL');
+    }
+  } catch {
+    throw new Error('TELEGRAM_WEBHOOK_URL must be an HTTPS URL');
+  }
+
   const workerSecret = env.TELEGRAM_WORKER_SECRET?.trim() ?? '';
   if (
     workerSecret.length < MIN_TELEGRAM_WORKER_SECRET_LENGTH ||
@@ -69,9 +89,9 @@ export function parseTelegramConfig(
   return {
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY as string,
     botToken: env.TELEGRAM_BOT_TOKEN as string,
-    botUsername: env.TELEGRAM_BOT_USERNAME as string,
+    botUsername,
     webhookSecret,
-    webhookUrl: env.TELEGRAM_WEBHOOK_URL as string,
+    webhookUrl,
     workerSecret,
     retry: DEFAULT_TELEGRAM_RETRY,
   };

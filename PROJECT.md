@@ -5,7 +5,7 @@
 - **Core Abstraction**: Layered Architecture strictly following Technical Specification §3:
   `UI` -> `Application Services` -> `Chat API` -> `Data Provider` -> `Supabase PostgreSQL / Realtime / Storage` (with seamless upgrade path to Matrix API / Synapse).
 - **Branding Engine**: Dynamic CSS Variables `:root` injection without full application rebuild.
-- **Telegram Integration**: Dual mode architecture (Bot API + User Bridge Mautrix model).
+- **Telegram Integration**: Server-only Telegram Bot API relay for account linking, direct-message notifications, and private text inbound relay.
 
 ## Module Registry
 | Module | Path | Responsibility | Depends on | Depended on by |
@@ -17,7 +17,7 @@
 | User Service | `services/user-service.ts` | Profiles, Directory, Status management | Data Provider | Contacts UI, Admin UI |
 | Group Service | `services/group-service.ts` | Group & Channel management | Data Provider | Chat UI, Admin UI |
 | Branding Service | `services/branding-service.ts` | Dynamic White-Label branding configuration | Data Provider | Theme Provider, Admin UI |
-| Telegram Service | `services/telegram-service.ts` | Telegram Bot & User Bridge integration | Data Provider | Telegram UI |
+| Telegram Service | `services/telegram-service.ts` | Client-safe Telegram Bot API relay account/status/activity integration | Data Provider | Telegram UI |
 | File Service | `services/file-service.ts` | File validation (max 50MB) and upload/download | Data Provider | Chat UI |
 | Auth Context | `lib/auth/auth-context.tsx` | Authentication, RBAC checks & session state | User Service | Next Pages |
 | Theme Provider | `components/ui/theme-provider.tsx` | Dynamic CSS variable `:root` injector | Branding Service | Root Layout |
@@ -39,14 +39,14 @@
 | 3 | Auth & Dynamic Branding Engine | Feature | Completed | `lib/auth/*`, `services/branding-service.ts`, `components/ui/theme-provider.tsx` | G1, G2, G3 | Live CSS root variable updates |
 | 4 | Chat UI & Realtime Messaging | Feature | Completed | `components/chat/*`, `components/sidebar/*` | G1, G2, G3 | DM, Groups, Channels, Reactions, Unread |
 | 5 | Admin Panel & Audit Logs | Feature | Completed | `app/admin/*`, `components/admin/*` | G1, G2, G3, G4 | User management, RBAC, Branding editor |
-| 6 | Telegram Integration UI | Feature | Completed | `components/telegram/*`, `services/telegram-service.ts` | G1, G2, G4 | Bot & User Bridge interface |
+| 6 | Telegram Bot API relay | Feature | Completed | `lib/telegram/*`, `app/api/telegram/*`, `supabase/migrations/003_telegram_bot_relay.sql`, `components/telegram/*` | G1, G2, G4 | Bot API linking, direct-message notifications, private text inbound relay, and retryable outbox; live credentials still require manual setup |
 | 7 | Production Git Configuration | Refactor | Completed | `.gitignore` | G3, G4 | Exclusion of technical & temporary files |
-| 8 | Backend Foundation — real Supabase provider (Auth, Postgres, Realtime) | Feature | Completed | `lib/provider/{index,supabase-client,supabase-provider}.ts`, `lib/auth/{index,auth-provider,mock-auth-provider,supabase-auth-provider}.ts`, `supabase/migrations/002_auth_and_rls.sql`, `app/api/audit-ip/route.ts`, `scripts/seed-supabase.ts`, `docs/SUPABASE_SETUP.md` | G1, G2, G3, G4 | `resolveProviderMode()` picks `mock` (zero-config, unchanged demo behavior) or `supabase` (real password auth, RLS-backed Postgres, Realtime broadcast) from `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`; `getDataProvider()`/`getAuthProvider()` factories wired into all 5 services + auth context; `SupabaseDataProvider` fully implements `IDataProvider` (35 members); RLS migration went through 2 fix rounds (privilege escalation, missing INSERT policy, member-bootstrap deadlock, audit-log RPC forgery — all closed). Mock provider files untouched (`mock-provider.ts`, `mock-auth-provider.ts` byte-identical since initial commit), so the zero-config demo path is unaffected. Task 16 full verification pass: 30/30 tests, clean build (17 routes incl. new `/api/audit-ip`), mock-mode regression checked via code-path inspection + dev-server route checks (no browser available); real-Supabase manual pass (Step 3) not run — no project credentials in this session. |
+| 8 | Backend Foundation — real Supabase provider (Auth, Postgres, Realtime) | Feature | Completed | `lib/provider/{index,supabase-client,supabase-provider}.ts`, `lib/auth/{index,auth-provider,mock-auth-provider,supabase-auth-provider}.ts`, `supabase/migrations/002_auth_and_rls.sql`, `app/api/audit-ip/route.ts`, `scripts/seed-supabase.ts`, `docs/SUPABASE_SETUP.md` | G1, G2, G3, G4 | `resolveProviderMode()` picks `mock` (zero-config, unchanged demo behavior) or `supabase` (real password auth, RLS-backed Postgres, Realtime broadcast) from `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`; `getDataProvider()`/`getAuthProvider()` factories wired into all 5 services + auth context; `SupabaseDataProvider` fully implements `IDataProvider` (35 members); RLS migration went through 2 fix rounds (privilege escalation, missing INSERT policy, member-bootstrap deadlock, audit-log RPC forgery — all closed). Mock provider files untouched (`mock-provider.ts`, `mock-auth-provider.ts` byte-identical since initial commit), so the zero-config demo path is unaffected. Full verification counts are recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`; real-Supabase manual pass not run — no project credentials in this session. |
 
 ## Known Issues & Technical Debt
 | Issue | Severity | Location | Impact on G1 / G3 / G4 | Owner | Plan |
 |-------|----------|----------|------------------------|-------|------|
-| External Mautrix Docker bridge deployment required for live Telegram sync | Low | `services/telegram-service.ts` | G1 (MVP 2 feature) | DevOps | Connect HTTPS bridge endpoint in production |
+| Live Telegram webhook, worker schedule, and BotFather credentials have not been exercised in this repository's automated sessions | Medium | `docs/TELEGRAM_SETUP.md`, `app/api/telegram/*` | G1/G4 | DevOps/QA | Apply migration 003, configure dedicated credentials, and complete the documented manual checks |
 | Admin → Audit table reads `globalDataProvider` directly (no `AuditService`), bypassing the `getDataProvider()` factory | Medium | `components/admin/audit-table.tsx` | G3 — silently serves stale mock audit data forever in Supabase mode even though `SupabaseDataProvider.getAuditLogs()` is fully implemented | Backend | Add an `AuditService` wrapping `getDataProvider().getAuditLogs()` and rewire the table to it |
 | Admin → Users "create user" throws in Supabase mode (profile-only insert isn't valid once real Supabase Auth owns signup) | Low | `components/admin/users-table.tsx`, `lib/provider/supabase-provider.ts` | G1/G3 — admin-invite flow for new users isn't implemented against real Supabase yet; caught and surfaced via `alert()` rather than silently failing | Backend | Implement an admin invite/signup flow against Supabase Auth (e.g. `supabase.auth.admin.inviteUserByEmail` via a server route) |
 | Real Supabase mode (Auth, RLS, Realtime, seed script) has not been exercised end-to-end against a live project in this repo's automated sessions | Medium | `lib/provider/supabase-provider.ts`, `lib/auth/supabase-auth-provider.ts`, `supabase/migrations/002_auth_and_rls.sql` | G2/G3 — correctness relies on unit/mocked tests + code review only, not a live Postgres/Realtime run | DevOps/QA | Run `docs/SUPABASE_SETUP.md`'s setup + `npm run seed:supabase` against a real project and complete Task 16 Step 3's manual pass (password rejection, persistence-after-refresh, cross-window Realtime, branding broadcast) |
@@ -55,6 +55,6 @@
 ## Build & Test Commands
 - `npm run dev`: Launch local Next.js development server
 - `npm run build`: Production build compilation (Verified 2026-08-11: Next.js 14.2.35, all routes compiled clean incl. the `/api/audit-ip` route added in the Backend Foundation plan)
-- `npm run test`: Vitest suite (Verified 2026-08-11: 30/30 tests passing across 6 test files)
+- `npm run test`: Vitest suite (Task 6 verification count is recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`)
 - `npm run lint`: not currently runnable non-interactively — see Known Issues (no ESLint config in repo)
 - `npm run seed:supabase`: seeds a real Supabase project per `docs/SUPABASE_SETUP.md` (requires `.env.local` with project credentials, not available in automated sessions)
