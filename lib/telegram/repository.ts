@@ -4,7 +4,7 @@ import {
   generateTelegramLinkToken,
   hashTelegramLinkToken,
 } from './config';
-import { getTelegramServerClient } from './server-client';
+import { getTelegramAuthClient, getTelegramServerClient } from './server-client';
 import type {
   Message,
   TelegramIdentity,
@@ -38,6 +38,7 @@ export type TelegramRepositoryErrorCode =
   | 'NOT_FOUND'
   | 'IDENTITY_NOT_LINKED'
   | 'NO_DIRECT_CONVERSATION'
+  | 'AUTHENTICATION_ERROR'
   | 'INVALID_ARGUMENT';
 
 export class TelegramRepositoryError extends Error {
@@ -106,18 +107,6 @@ export type TelegramClaimedIdentity = Pick<
   'id' | 'profile_id' | 'telegram_user_id' | 'telegram_chat_id' | 'username' | 'status'
 >;
 
-/** The caller must pass an ID obtained from authenticated server-side context. */
-export function createTelegramUserScopeFromAuthenticatedActor(
-  actorUserId: string,
-): TelegramUserScope {
-  requireText(actorUserId);
-  return Object.freeze({
-    actorUserId,
-    ownerUserId: actorUserId,
-    [TELEGRAM_USER_SCOPE_BRAND]: true as const,
-  });
-}
-
 const LINK_TOKEN_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_OUTBOX_LIMIT = 10;
 const MAX_OUTBOX_LIMIT = 100;
@@ -144,6 +133,9 @@ function repositoryError(error: unknown): TelegramRepositoryError {
   if (error instanceof TelegramRepositoryError) return error;
   if (isRecord(error) && error.code === 'CONFIGURATION_ERROR') {
     return new TelegramRepositoryError('CONFIGURATION_ERROR');
+  }
+  if (isRecord(error) && error.code === 'AUTHENTICATION_ERROR') {
+    return new TelegramRepositoryError('AUTHENTICATION_ERROR');
   }
   return new TelegramRepositoryError(providerErrorCode(error));
 }
@@ -185,6 +177,27 @@ function boundedInteger(value: number | undefined, fallback: number, maximum: nu
   const candidate = value ?? fallback;
   if (!Number.isFinite(candidate)) throw new TelegramRepositoryError('INVALID_ARGUMENT');
   return Math.min(Math.max(Math.floor(candidate), 1), maximum);
+}
+
+export async function createTelegramUserScope(
+  accessToken: string,
+): Promise<TelegramUserScope> {
+  requireText(accessToken);
+
+  try {
+    const { data, error } = await getTelegramAuthClient().auth.getUser(accessToken);
+    if (error || !data.user?.id) {
+      throw new TelegramRepositoryError('AUTHENTICATION_ERROR');
+    }
+
+    return Object.freeze({
+      actorUserId: data.user.id,
+      ownerUserId: data.user.id,
+      [TELEGRAM_USER_SCOPE_BRAND]: true as const,
+    });
+  } catch (error) {
+    throw repositoryError(error);
+  }
 }
 
 export async function createTelegramLink(

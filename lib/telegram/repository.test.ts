@@ -4,10 +4,13 @@ vi.mock('server-only', () => ({}));
 
 const rpc = vi.fn();
 const from = vi.fn();
+const getUser = vi.fn();
 const client = { rpc, from };
+const authClient = { auth: { getUser } };
 
 vi.mock('./server-client', () => ({
   getTelegramServerClient: () => client,
+  getTelegramAuthClient: () => authClient,
 }));
 
 import {
@@ -21,7 +24,7 @@ import {
   ingestTelegramInbound,
   leaseOutbox,
   TelegramRepositoryError,
-  createTelegramUserScopeFromAuthenticatedActor,
+  createTelegramUserScope,
   type TelegramUserScope,
 } from './repository';
 
@@ -29,12 +32,45 @@ describe('Telegram repository', () => {
   beforeEach(() => {
     rpc.mockReset();
     from.mockReset();
+    getUser.mockReset();
+  });
+
+  async function verifiedScope(userId = 'profile-1'): Promise<TelegramUserScope> {
+    getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
+    return createTelegramUserScope('verified-access-token');
+  }
+
+  it('creates a scope only from the Supabase Auth verified subject', async () => {
+    const scope = await verifiedScope();
+
+    expect(scope.actorUserId).toBe('profile-1');
+    expect(scope.ownerUserId).toBe('profile-1');
+    expect(getUser).toHaveBeenCalledWith('verified-access-token');
+  });
+
+  it.each([undefined, ''])('rejects a missing access token before Auth lookup: %j', async (token) => {
+    await expect(createTelegramUserScope(token as never)).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+    expect(getUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid access token when Supabase Auth returns an error', async () => {
+    getUser.mockResolvedValue({
+      data: { user: null },
+      error: { message: 'invalid token=secret' },
+    });
+
+    await expect(createTelegramUserScope('invalid-access-token')).rejects.toMatchObject({
+      code: 'AUTHENTICATION_ERROR',
+      message: 'Telegram repository operation failed.',
+    });
   });
 
   it('persists only the hash when creating a link token', async () => {
     const insert = vi.fn().mockResolvedValue({ error: null });
     from.mockReturnValue({ insert });
-    const scope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
+    const scope = await verifiedScope();
 
     const result = await createTelegramLink(scope, { expiresAt: '2026-08-11T12:00:00.000Z' });
 
@@ -121,7 +157,7 @@ describe('Telegram repository', () => {
     const statusEq = vi.fn().mockReturnValue({ eq: finalEq });
     const profileEq = vi.fn().mockReturnValue({ eq: statusEq });
     const update = vi.fn().mockReturnValue({ eq: profileEq });
-    const scope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
+    const scope = await verifiedScope();
     from
       .mockReturnValueOnce({ select: identitySelect })
       .mockReturnValueOnce({ select: logSelect })
@@ -143,7 +179,7 @@ describe('Telegram repository', () => {
   });
 
   it('rejects a cross-profile scope before service-role access', async () => {
-    const ownerScope = createTelegramUserScopeFromAuthenticatedActor('profile-1');
+    const ownerScope = await verifiedScope();
     const crossProfileScope = {
       ...ownerScope,
       ownerUserId: 'profile-2',

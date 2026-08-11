@@ -76,3 +76,40 @@ The Vitest commands continue to emit the existing Vite CommonJS/ESM configuratio
 
 - The authenticated actor scope factory is a server-boundary contract; later provider/auth code must call it only with the authenticated session subject, never request-supplied profile data.
 - RPC execution still needs integration verification against a configured Supabase/PostgreSQL instance.
+
+## Authentication Boundary Fix Report
+
+### Status
+
+The remaining reviewer finding is fixed for Task 2 only.
+
+### Fixes
+
+- Replaced the caller-supplied actor/profile scope factory with `createTelegramUserScope(accessToken)`.
+- Scope creation now calls Supabase Auth `getUser(accessToken)` through a separate lazy anon-key Supabase client configured with `persistSession: false`, `autoRefreshToken: false`, and no cookies.
+- The scope owner is derived only from the verified `data.user.id`; no owner or profile ID is accepted as authority.
+- Missing tokens fail before Auth lookup. Invalid tokens and Auth responses without a user fail with a safe authentication error. Service-role RPC operations remain separate trusted webhook/worker APIs.
+- Added repository tests for Auth success, missing/invalid token rejection, and cross-profile scope rejection, plus server-client coverage proving anon-key sessionless configuration.
+
+### Verification Commands And Outputs
+
+- `npx vitest run lib/telegram/repository.test.ts` - 1 file passed, 11 tests passed.
+- `npx vitest run lib/telegram/server-client.test.ts` - 1 file passed, 1 test passed.
+- `npx vitest run` - 10 files passed, 69 tests passed.
+- `npx tsc --noEmit` - passed with no output.
+- `npm run build` - passed; Next.js production build compiled, lint/type checks passed, and 17 static pages generated.
+- `git diff --check` - passed with no whitespace errors; existing line-ending warnings remain for unrelated UI files and changed Telegram files.
+
+The Vitest commands continue to emit the existing Vite CommonJS/ESM configuration warning. No Supabase instance is configured, so Auth and RPC behavior is verified with mocks plus static client configuration checks.
+
+### Self-Review
+
+- `createTelegramUserScope` has no owner/profile argument and cannot bind scope ownership without a verified Supabase Auth subject.
+- Auth verification uses the public anon key client, while repository reads and mutations continue using the separate service-role client only after scope creation or trusted service entry points.
+- `server-only` imports and runtime guards remain in place. No webhook, provider, worker, or UI code was changed.
+- Unrelated UI changes, the UI plan, and `tsconfig.tsbuildinfo` were not staged.
+
+### Concerns
+
+- The later authenticated server boundary must pass the actual Supabase access token, not a user-supplied profile ID or substituted subject.
+- Live Auth/RPC integration still requires a configured Supabase project.
