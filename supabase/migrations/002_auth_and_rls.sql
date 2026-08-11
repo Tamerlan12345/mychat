@@ -101,6 +101,27 @@ CREATE TRIGGER on_conversations_update
     BEFORE UPDATE ON conversations
     FOR EACH ROW EXECUTE FUNCTION prevent_conversation_created_by_change();
 
+-- Insert audit log via SECURITY DEFINER to bypass RLS.
+CREATE OR REPLACE FUNCTION insert_audit_log(
+    p_user_id UUID,
+    p_user_email VARCHAR,
+    p_action VARCHAR,
+    p_target_type VARCHAR,
+    p_target_id VARCHAR,
+    p_metadata JSONB,
+    p_ip VARCHAR
+)
+RETURNS audit_logs AS $$
+DECLARE
+    result audit_logs;
+BEGIN
+    INSERT INTO audit_logs (user_id, user_email, action, target_type, target_id, metadata, ip)
+    VALUES (p_user_id, p_user_email, p_action, p_target_type, p_target_id, p_metadata, p_ip)
+    RETURNING * INTO result;
+    RETURN result;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
 -- 3. Policies.
 
 -- profiles: company directory is readable by any authenticated user; only the

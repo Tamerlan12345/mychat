@@ -509,11 +509,15 @@ export class SupabaseDataProvider {
       }
     }
 
-    const { data: row, error } = await this.client
-      .from('audit_logs')
-      .insert({ ...data, ip })
-      .select()
-      .single();
+    const { data: row, error } = await this.client.rpc('insert_audit_log', {
+      p_user_id: data.user_id,
+      p_user_email: data.user_email,
+      p_action: data.action,
+      p_target_type: data.target_type,
+      p_target_id: data.target_id ?? null,
+      p_metadata: data.metadata ?? {},
+      p_ip: ip,
+    });
     if (error) throw new Error(`logAudit failed: ${error.message}`);
     return mapAuditRow(row);
   }
