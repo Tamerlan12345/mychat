@@ -223,6 +223,8 @@ REVOKE ALL ON FUNCTION telegram_service_role_only() FROM PUBLIC, anon, authentic
 GRANT EXECUTE ON FUNCTION telegram_service_role_only() TO service_role;
 
 REVOKE ALL ON FUNCTION enqueue_telegram_notification() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION cancel_telegram_outbox_on_identity_change() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION cancel_telegram_outbox_on_settings_change() FROM PUBLIC, anon, authenticated;
 
 -- Atomically consume a token and assign its Telegram identity to its owner.
 CREATE OR REPLACE FUNCTION claim_telegram_link_token(
@@ -499,6 +501,7 @@ BEGIN
         WHERE o.id = p_id
           AND o.lease_token = p_lease_token
           AND o.status = 'leased'
+          AND o.leased_until > NOW()
           AND p.status IN ('OFFLINE', 'AWAY')
           AND us.telegram_enabled = TRUE
     );

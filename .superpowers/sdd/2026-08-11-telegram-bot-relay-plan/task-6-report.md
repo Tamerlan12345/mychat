@@ -87,3 +87,37 @@ Final verification completed:
 
 Live Supabase and Telegram protocol checks remain manual and require a
 dedicated test project and real Bot API credentials.
+
+## Final Review Follow-up
+
+### Findings Closed
+
+- Pre-send eligibility now requires `leased_until > NOW()` in addition to the
+  leased status and matching lease token, preventing a paused worker from
+  sending after another worker reclaims the row.
+- The SECURITY DEFINER trigger functions
+  `enqueue_telegram_notification()`,
+  `cancel_telegram_outbox_on_identity_change()`, and
+  `cancel_telegram_outbox_on_settings_change()` explicitly revoke execution
+  from `PUBLIC`, `anon`, and `authenticated`; trigger execution remains intact
+  and no direct service-role grant was added for trigger-only functions.
+
+### Regression Coverage
+
+- Added a migration contract test for an expired lease retaining its old token.
+- Added a guarded Supabase integration assertion that the pre-send RPC rejects
+  that expired lease before reclamation.
+- Added migration privilege-contract assertions for all three trigger
+  functions.
+
+### Verification
+
+- Focused worker/migration plus guarded integration tests: 1 file passed, 1
+  skipped; 24 tests passed, 9 skipped.
+- Full `npm run test`: 15 files passed, 1 skipped; 151 tests passed, 9 skipped.
+- `npx tsc --noEmit`: passed.
+- `npm run build`: passed; all 17 routes compiled.
+- `git diff --check`: passed.
+
+The live Supabase regression assertion was skipped because this session has no
+dedicated test-project credentials.

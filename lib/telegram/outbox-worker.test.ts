@@ -313,10 +313,16 @@ describe('Telegram outbox migration contract', () => {
   it('does not expose the trigger or outbox mutations to browser roles', () => {
     expect(migration).toMatch(/REVOKE ALL ON telegram_link_tokens, telegram_identities,\s+telegram_relay_log, telegram_notification_outbox FROM PUBLIC, anon, authenticated/);
     expect(migration).toMatch(/REVOKE ALL ON FUNCTION enqueue_telegram_notification\(\) FROM PUBLIC, anon, authenticated/);
+    expect(migration).toMatch(/REVOKE ALL ON FUNCTION cancel_telegram_outbox_on_identity_change\(\) FROM PUBLIC, anon, authenticated/);
+    expect(migration).toMatch(/REVOKE ALL ON FUNCTION cancel_telegram_outbox_on_settings_change\(\) FROM PUBLIC, anon, authenticated/);
     expect(migration).toMatch(/FOR UPDATE SKIP LOCKED/);
     expect(migration).toMatch(/status = 'leased' AND \(leased_until IS NULL OR leased_until < NOW\(\)\)/);
     expect(migration).toMatch(/attempts >= max_attempts/);
     expect(migration).toMatch(/can_send_telegram_outbox/);
+  });
+
+  it('rejects an expired lease even when its old token still matches', () => {
+    expect(migration).toMatch(/o\.status = 'leased'\s+AND o\.leased_until > NOW\(\)/);
   });
 
   it('excludes connected recipients and recipients with disabled settings', () => {

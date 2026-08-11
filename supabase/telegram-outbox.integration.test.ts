@@ -193,6 +193,10 @@ describeIntegration('Telegram outbox Supabase integration', () => {
       }).select('*').single(),
       'create stale outbox',
     );
+    expect(await rpc('can_send_telegram_outbox', {
+      p_id: stale.id,
+      p_lease_token: stale.lease_token,
+    })).toBe(false);
     const leasedRows = await rpc('lease_telegram_outbox', { p_limit: 1, p_lease_seconds: 30 });
     const reclaimed = leasedRows.find((entry: any) => entry.id === stale.id);
     expect(reclaimed).toBeDefined();
