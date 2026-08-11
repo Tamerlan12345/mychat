@@ -1,217 +1,301 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Send, ShieldCheck, Lock, Smartphone, RefreshCw, CheckCircle2, MessageSquare } from 'lucide-react';
-import { TelegramAccount, TelegramChat, TelegramMessage } from '@/types';
+import React, { useEffect, useState } from 'react';
+import {
+  Check,
+  CheckCircle2,
+  Clipboard,
+  ExternalLink,
+  Link as LinkIcon,
+  RefreshCw,
+  Send,
+  Unplug,
+  XCircle,
+} from 'lucide-react';
+import type { TelegramIdentity, TelegramRelayLog } from '@/types';
 import { TelegramService } from '@/services/telegram-service';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+interface TelegramLink {
+  deepLink: string;
+  expiresAt: string;
+}
 
 export const TelegramView: React.FC = () => {
-  const { user } = useAuth();
-  const [account, setAccount] = useState<TelegramAccount | null>(null);
-  const [phoneInput, setPhoneInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [chats, setChats] = useState<TelegramChat[]>([]);
-  const [selectedChat, setSelectedChat] = useState<TelegramChat | null>(null);
-  const [messages, setMessages] = useState<TelegramMessage[]>([]);
-  const [msgInput, setMsgInput] = useState('');
+  const { user, isLoading: authLoading } = useAuth();
+  const [identity, setIdentity] = useState<TelegramIdentity | null>(null);
+  const [relayLogs, setRelayLogs] = useState<TelegramRelayLog[]>([]);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [link, setLink] = useState<TelegramLink | null>(null);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [disconnectLoading, setDisconnectLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    TelegramService.getAccountStatus(user.id).then(acc => {
-      setAccount(acc);
-      if (acc.connected) {
-        TelegramService.getTelegramChats(user.id).then(cList => {
-          setChats(cList);
-          if (cList.length > 0) setSelectedChat(cList[0]);
-        });
-      }
-    });
+    let active = true;
+
+    if (!user) {
+      setAccountLoading(false);
+      setActivityLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAccountLoading(true);
+    setActivityLoading(true);
+    setAccountError(null);
+    setActivityError(null);
+
+    TelegramService.getAccount()
+      .then(result => {
+        if (active) setIdentity(result);
+      })
+      .catch(() => {
+        if (active) setAccountError('Не удалось загрузить статус Telegram.');
+      })
+      .finally(() => {
+        if (active) setAccountLoading(false);
+      });
+
+    TelegramService.getRelayLogs()
+      .then(result => {
+        if (active) setRelayLogs(result);
+      })
+      .catch(() => {
+        if (active) setActivityError('Не удалось загрузить активность relay.');
+      })
+      .finally(() => {
+        if (active) setActivityLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [user]);
 
-  useEffect(() => {
-    if (user && selectedChat) {
-      TelegramService.getTelegramMessages(user.id, selectedChat.id).then(setMessages);
-    }
-  }, [user, selectedChat]);
-
-  const handleConnect = async () => {
-    if (!user || !phoneInput.trim()) return;
-    setLoading(true);
+  const handleCreateLink = async () => {
+    setLinkLoading(true);
+    setActionError(null);
+    setCopied(false);
     try {
-      const acc = await TelegramService.connect(user.id, phoneInput.trim());
-      setAccount(acc);
-      const cList = await TelegramService.getTelegramChats(user.id);
-      setChats(cList);
-      if (cList.length > 0) setSelectedChat(cList[0]);
+      setLink(await TelegramService.createLink());
+    } catch {
+      setActionError('Не удалось создать ссылку. Попробуйте ещё раз.');
     } finally {
-      setLoading(false);
+      setLinkLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link.deepLink);
+      setCopied(true);
+    } catch {
+      setActionError('Ссылку не удалось скопировать. Откройте её через Telegram.');
     }
   };
 
   const handleDisconnect = async () => {
-    if (!user) return;
-    await TelegramService.disconnect(user.id);
-    setAccount({ user_id: user.id, connected: false, session_encrypted: false, last_sync: new Date().toISOString() });
-    setChats([]);
-    setSelectedChat(null);
+    setDisconnectLoading(true);
+    setActionError(null);
+    try {
+      await TelegramService.disconnect();
+      setIdentity(current =>
+        current
+          ? {
+              ...current,
+              status: 'disconnected',
+              disconnected_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+          : null,
+      );
+      setLink(null);
+    } catch {
+      setActionError('Не удалось отключить Telegram. Попробуйте ещё раз.');
+    } finally {
+      setDisconnectLoading(false);
+    }
   };
 
-  const handleSendTgMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !selectedChat || !msgInput.trim()) return;
-    const newMsg = await TelegramService.sendMessage(user.id, selectedChat.id, msgInput.trim());
-    setMessages(prev => [...prev, newMsg]);
-    setMsgInput('');
-  };
+  if (authLoading) {
+    return <main className="flex-1 bg-slate-50 p-6 text-sm text-slate-500">Загрузка…</main>;
+  }
+
+  if (!user) {
+    return <main className="flex-1 bg-slate-50 p-6 text-sm text-slate-600">Войдите, чтобы настроить Telegram.</main>;
+  }
+
+  const connected = identity?.status === 'active';
 
   return (
-    <div className="flex-1 bg-slate-950 flex flex-col h-full overflow-hidden p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
-            <Send className="w-5 h-5" />
-          </div>
+    <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl space-y-6">
+        <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-lg font-bold text-white">Telegram User Bridge</h1>
-            <p className="text-xs text-slate-400">
-              Интеграция личного Telegram-аккаунта и корпоративных ботов
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600">
+              <Send className="h-4 w-4" />
+              Bot API
+            </div>
+            <h1 className="text-xl font-semibold text-slate-900">Telegram relay</h1>
+            <p className="mt-1 max-w-xl text-sm text-slate-500">
+              Свяжите свой Telegram-чат с рабочими уведомлениями через бота.
             </p>
           </div>
-        </div>
-
-        {account?.connected && (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Подключен ({account.phone})
+          {accountLoading ? (
+            <span className="inline-flex items-center gap-2 text-xs text-slate-500">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Проверяем статус
             </span>
-            <Button variant="danger" size="sm" onClick={handleDisconnect}>
-              Отключить Telegram
-            </Button>
+          ) : accountError ? (
+            <span className="inline-flex items-center gap-2 text-xs text-rose-600">
+              <XCircle className="h-3.5 w-3.5" /> Ошибка статуса
+            </span>
+          ) : (
+            <span
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                connected
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-slate-200 bg-white text-slate-600'
+              }`}
+            >
+              {connected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Unplug className="h-3.5 w-3.5" />}
+              {connected ? 'Подключен' : 'Не подключен'}
+            </span>
+          )}
+        </header>
+
+        {actionError && (
+          <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {actionError}
           </div>
         )}
-      </div>
 
-      {!account?.connected ? (
-        /* Disconnected State / Connect Form */
-        <div className="max-w-md mx-auto my-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-5">
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 bg-sky-500/10 border border-sky-500/20 text-sky-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Smartphone className="w-7 h-7" />
-            </div>
-            <h2 className="text-base font-bold text-white">Подключить Telegram аккаунт</h2>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Получайте сообщения из Telegram прямо в интерфейсе Holding Chat с помощью безопасного моста Mautrix Bridge.
-            </p>
-          </div>
+        {accountError ? (
+          <section className="rounded-xl border border-rose-200 bg-white p-5 text-sm text-rose-700">
+            {accountError}
+          </section>
+        ) : (
+          <section className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Связь с Telegram</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Одноразовая ссылка откроет чат с рабочим ботом. Токен бота и конфигурация не показываются.
+                  </p>
+                </div>
+                <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
+                  <LinkIcon className="h-4 w-4" />
+                </div>
+              </div>
 
-          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-start gap-2.5 text-xs text-slate-300">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-semibold text-white">Безопасность сессии:</span> Все ключи шифруются. Администратор системы не имеет доступа к вашей Telegram-сессии (Tech Spec §25).
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <Input
-              label="Номер телефона Telegram"
-              placeholder="+7 (999) 000-0000"
-              value={phoneInput}
-              onChange={e => setPhoneInput(e.target.value)}
-            />
-            <Button
-              variant="primary"
-              className="w-full bg-sky-600 hover:bg-sky-500"
-              onClick={handleConnect}
-              disabled={!phoneInput.trim() || loading}
-            >
-              {loading ? 'Авторизация...' : 'Подключить Telegram'}
-            </Button>
-          </div>
-        </div>
-      ) : (
-        /* Connected State / Dual Pane Telegram Messenger */
-        <div className="flex-1 flex bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-          {/* Left Telegram Chat List */}
-          <div className="w-72 border-r border-slate-800 flex flex-col bg-slate-950">
-            <div className="p-3 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Telegram Чаты
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {chats.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedChat(c)}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between ${
-                    selectedChat?.id === c.id ? 'bg-sky-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="truncate">
-                    <p className="truncate">{c.title}</p>
-                    <p className="text-[10px] text-slate-400 truncate font-normal">{c.last_message}</p>
+              {connected ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                    <p className="text-xs font-medium text-emerald-800">Telegram-чат связан</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
+                      {identity?.username ? `@${identity.username.replace(/^@/, '')}` : 'Имя пользователя не указано'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">Chat ID: {identity?.telegram_chat_id}</p>
                   </div>
-                  {c.unread_count > 0 && (
-                    <span className="bg-sky-400 text-slate-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                      {c.unread_count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Telegram Chat Window */}
-          <div className="flex-1 flex flex-col bg-slate-900">
-            {selectedChat ? (
-              <>
-                <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
-                  <span className="font-bold text-xs text-white">{selectedChat.title}</span>
-                  <span className="text-[10px] text-sky-400 font-medium uppercase">Mautrix Telegram Bridge</span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {messages.map(m => (
-                    <div
-                      key={m.id}
-                      className={`flex flex-col ${m.is_outgoing ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`max-w-md p-3 rounded-xl text-xs ${
-                          m.is_outgoing
-                            ? 'bg-sky-600 text-white rounded-br-none'
-                            : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-bl-none'
-                        }`}
-                      >
-                        <p className="font-semibold text-[10px] opacity-80 mb-1">{m.sender_name}</p>
-                        <p>{m.content}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <form onSubmit={handleSendTgMessage} className="p-3 border-t border-slate-800 flex gap-2 bg-slate-950">
-                  <input
-                    type="text"
-                    value={msgInput}
-                    onChange={e => setMsgInput(e.target.value)}
-                    placeholder="Написать в Telegram..."
-                    className="flex-1 bg-slate-900 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 focus:outline-none focus:border-sky-500"
-                  />
-                  <Button type="submit" className="bg-sky-600 hover:bg-sky-500 text-xs">
-                    Отправить
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDisconnect}
+                    disabled={disconnectLoading}
+                    className="text-rose-700 hover:bg-rose-50"
+                  >
+                    {disconnectLoading ? 'Отключаем…' : 'Отключить Telegram'}
                   </Button>
-                </form>
-              </>
-            ) : (
-              <div className="m-auto text-xs text-slate-500">Выберите Telegram чат для просмотра</div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-700">Telegram пока не связан с вашим рабочим аккаунтом.</p>
+                  <Button onClick={handleCreateLink} disabled={linkLoading}>
+                    {linkLoading ? 'Создаём ссылку…' : 'Получить ссылку Telegram'}
+                  </Button>
+                </div>
+              )}
+
+              {link && !connected && (
+                <div className="mt-5 border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-xs font-medium text-slate-700">Ссылка действует до {formatDate(link.expiresAt)}</p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <a
+                      href={link.deepLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      Открыть в Telegram <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <Button variant="outline" size="sm" onClick={handleCopyLink}>
+                      {copied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : <Clipboard className="mr-1.5 h-3.5 w-3.5" />}
+                      {copied ? 'Скопировано' : 'Копировать'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Активность relay</h2>
+                  <p className="mt-1 text-xs text-slate-500">Последние операции доставки между рабочим чатом и Telegram.</p>
+                </div>
+                <span className="text-xs text-slate-400">{relayLogs.length} записей</span>
+              </div>
+
+              {activityLoading ? (
+                <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
+                  <RefreshCw className="h-4 w-4 animate-spin" /> Загружаем активность…
+                </div>
+              ) : activityError ? (
+                <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                  {activityError}
+                </div>
+              ) : relayLogs.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                  Активность появится после первой доставки сообщения.
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {relayLogs.map(log => (
+                    <li key={log.id} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">
+                          {log.direction === 'inbound' ? 'Входящее сообщение' : 'Исходящее уведомление'}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-slate-500">Диалог {log.conversation_id}</p>
+                      </div>
+                      <time className="shrink-0 text-right text-xs text-slate-400" dateTime={log.created_at}>
+                        {formatDate(log.created_at)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
   );
 };

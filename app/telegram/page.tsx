@@ -6,7 +6,7 @@ import { TelegramView } from '@/components/telegram/telegram-view';
 
 export default function TelegramPage() {
   return (
-    <div className="flex h-screen w-screen bg-slate-950 overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
       <Sidebar
         onSelectConversation={() => {}}
         onOpenCreateModal={() => {}}

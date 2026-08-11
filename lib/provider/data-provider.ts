@@ -9,6 +9,7 @@ import {
   AuditLog,
   TelegramIdentity,
   TelegramRelayLog,
+  UserSettings,
   UserStatus,
   UserRole
 } from '@/types';
@@ -84,6 +85,8 @@ export interface IDataProvider {
   getTelegramIdentity(): Promise<TelegramIdentity | null>;
   disconnectTelegram(): Promise<boolean>;
   getTelegramRelayLogs(limit?: number): Promise<TelegramRelayLog[]>;
+  getUserSettings(): Promise<UserSettings>;
+  updateUserSettings(updates: Partial<Pick<UserSettings, 'notifications' | 'mentions_only' | 'theme' | 'language' | 'telegram_enabled'>>): Promise<UserSettings>;
 
   // Realtime Subscriptions
   subscribeToMessages(conversationId: string, callback: (message: Message) => void): () => void;

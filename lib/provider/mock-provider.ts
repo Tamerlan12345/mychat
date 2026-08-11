@@ -10,6 +10,7 @@ import {
   AuditLog,
   TelegramIdentity,
   TelegramRelayLog,
+  UserSettings,
   UserStatus
 } from '@/types';
 import type { TelegramLink } from './data-provider';
@@ -234,6 +235,7 @@ export class MockDataProvider implements IDataProvider {
   private auditLogs: AuditLog[] = [...INITIAL_AUDIT];
   private telegramIdentityMap: Map<string, TelegramIdentity> = new Map();
   private telegramRelayLogs: TelegramRelayLog[] = [];
+  private userSettingsMap: Map<string, UserSettings> = new Map();
   private telegramLinkTokens: Map<string, { ownerUserId: string; expiresAt: number; used: boolean }> = new Map();
   private nextTelegramLinkToken = 1;
   private currentUserId: string;
@@ -639,6 +641,34 @@ export class MockDataProvider implements IDataProvider {
       .filter(log => log.profile_id === this.currentUserId)
       .slice(0, boundedLimit)
       .map(log => ({ ...log }));
+  }
+
+  async getUserSettings(): Promise<UserSettings> {
+    const existing = this.userSettingsMap.get(this.currentUserId);
+    if (existing) return { ...existing };
+
+    const now = new Date().toISOString();
+    const defaults: UserSettings = {
+      user_id: this.currentUserId,
+      notifications: true,
+      mentions_only: false,
+      theme: 'dark',
+      language: 'ru',
+      telegram_enabled: false,
+      created_at: now,
+      updated_at: now,
+    };
+    this.userSettingsMap.set(this.currentUserId, defaults);
+    return { ...defaults };
+  }
+
+  async updateUserSettings(
+    updates: Partial<Pick<UserSettings, 'notifications' | 'mentions_only' | 'theme' | 'language' | 'telegram_enabled'>>,
+  ): Promise<UserSettings> {
+    const current = await this.getUserSettings();
+    const updated = { ...current, ...updates, updated_at: new Date().toISOString() };
+    this.userSettingsMap.set(this.currentUserId, updated);
+    return { ...updated };
   }
 
   setCurrentUser(userId: string): void {

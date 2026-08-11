@@ -12,6 +12,7 @@ import {
   TelegramAccount,
   TelegramIdentity,
   TelegramRelayLog,
+  UserSettings,
 } from '@/types';
 import type { TelegramLink } from './data-provider';
 
@@ -682,6 +683,55 @@ export class SupabaseDataProvider implements IDataProvider {
       .limit(boundedLimit);
     if (error) throw new Error(`getTelegramRelayLogs failed: ${error.message}`);
     return (data ?? []) as TelegramRelayLog[];
+  }
+
+  async getUserSettings(): Promise<UserSettings> {
+    const profileId = await this.currentTelegramProfileId();
+    const { data, error } = await this.client
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', profileId)
+      .maybeSingle();
+    if (error) throw new Error(`getUserSettings failed: ${error.message}`);
+
+    const now = new Date().toISOString();
+    return {
+      user_id: profileId,
+      notifications: data?.notifications ?? true,
+      mentions_only: data?.mentions_only ?? false,
+      theme: data?.theme ?? 'dark',
+      language: data?.language ?? 'ru',
+      telegram_enabled: data?.telegram_enabled ?? false,
+      created_at: data?.created_at ?? now,
+      updated_at: data?.updated_at ?? now,
+    };
+  }
+
+  async updateUserSettings(
+    updates: Partial<Pick<UserSettings, 'notifications' | 'mentions_only' | 'theme' | 'language' | 'telegram_enabled'>>,
+  ): Promise<UserSettings> {
+    const profileId = await this.currentTelegramProfileId();
+    const current = await this.getUserSettings();
+    const { data, error } = await this.client
+      .from('user_settings')
+      .upsert(
+        {
+          user_id: profileId,
+          notifications: current.notifications,
+          mentions_only: current.mentions_only,
+          theme: current.theme,
+          language: current.language,
+          telegram_enabled: current.telegram_enabled,
+          ...updates,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' },
+      )
+      .select('*')
+      .single();
+    if (error) throw new Error(`updateUserSettings failed: ${error.message}`);
+
+    return data as UserSettings;
   }
 
   async getTelegramAccount(userId: string): Promise<TelegramAccount> {

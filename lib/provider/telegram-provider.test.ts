@@ -78,6 +78,55 @@ describe('Supabase Telegram provider boundaries', () => {
     expect(eq).toHaveBeenCalledWith('profile_id', 'profile-2');
     expect(limit).toHaveBeenCalledWith(100);
   });
+
+  it('reads notification settings using the current authenticated profile', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'profile-2' } }, error: null });
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { user_id: 'profile-2', notifications: true, mentions_only: false, telegram_enabled: true },
+      error: null,
+    });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    await expect(new SupabaseDataProvider().getUserSettings()).resolves.toMatchObject({
+      user_id: 'profile-2',
+      telegram_enabled: true,
+    });
+    expect(from).toHaveBeenCalledWith('user_settings');
+    expect(eq).toHaveBeenCalledWith('user_id', 'profile-2');
+  });
+
+  it('persists notification settings through the authenticated Supabase provider', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'profile-2' } }, error: null });
+    const currentMaybeSingle = vi.fn().mockResolvedValue({
+      data: { user_id: 'profile-2', notifications: true, mentions_only: false, telegram_enabled: false },
+      error: null,
+    });
+    const currentEq = vi.fn().mockReturnValue({ maybeSingle: currentMaybeSingle });
+    const currentSelect = vi.fn().mockReturnValue({ eq: currentEq });
+    const single = vi.fn().mockResolvedValue({
+      data: { user_id: 'profile-2', notifications: true, mentions_only: false, telegram_enabled: true },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const upsert = vi.fn().mockReturnValue({ select });
+    let settingsRead = false;
+    from.mockImplementation(() => {
+      if (!settingsRead) {
+        settingsRead = true;
+        return { select: currentSelect };
+      }
+      return { upsert };
+    });
+
+    await expect(new SupabaseDataProvider().updateUserSettings({ telegram_enabled: true })).resolves.toMatchObject({
+      telegram_enabled: true,
+    });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'profile-2', telegram_enabled: true }),
+      { onConflict: 'user_id' },
+    );
+  });
 });
 
 describe('Mock Telegram provider boundaries', () => {
@@ -103,5 +152,16 @@ describe('Mock Telegram provider boundaries', () => {
     await provider.disconnectTelegram();
     provider.setCurrentUser('u1');
     expect((await provider.getTelegramIdentity())?.status).toBe('active');
+  });
+
+  it('persists notification settings per current mock user', async () => {
+    const provider = new MockDataProvider('u2');
+
+    expect((await provider.getUserSettings()).telegram_enabled).toBe(false);
+    await provider.updateUserSettings({ telegram_enabled: true });
+    expect((await provider.getUserSettings()).telegram_enabled).toBe(true);
+
+    provider.setCurrentUser('u1');
+    expect((await provider.getUserSettings()).telegram_enabled).toBe(false);
   });
 });

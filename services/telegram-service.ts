@@ -1,5 +1,5 @@
 import { getDataProvider } from '@/lib/provider';
-import type { TelegramAccount, TelegramChat, TelegramIdentity, TelegramMessage, TelegramRelayLog } from '@/types';
+import type { TelegramAccount, TelegramChat, TelegramIdentity, TelegramMessage, TelegramRelayLog, UserSettings } from '@/types';
 import type { TelegramLink } from '@/lib/provider/data-provider';
 
 export class TelegramService {
@@ -17,6 +17,16 @@ export class TelegramService {
 
   static async getRelayLogs(limit?: number): Promise<TelegramRelayLog[]> {
     return getDataProvider().getTelegramRelayLogs(limit);
+  }
+
+  static async getUserSettings(): Promise<UserSettings> {
+    return getDataProvider().getUserSettings();
+  }
+
+  static async updateUserSettings(
+    updates: Partial<Pick<UserSettings, 'notifications' | 'mentions_only' | 'theme' | 'language' | 'telegram_enabled'>>,
+  ): Promise<UserSettings> {
+    return getDataProvider().updateUserSettings(updates);
   }
 
   // Compatibility shims keep the old, out-of-scope screen compiling without
