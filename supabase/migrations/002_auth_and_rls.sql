@@ -20,7 +20,7 @@ BEGIN
     );
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
@@ -45,7 +45,7 @@ RETURNS BOOLEAN AS $$
     SELECT EXISTS (
         SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPER_ADMIN')
     );
-$$ LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp STABLE;
 
 -- Helper: is the current user a member of the given conversation?
 CREATE OR REPLACE FUNCTION is_conversation_member(conv_id UUID)
@@ -53,7 +53,7 @@ RETURNS BOOLEAN AS $$
     SELECT EXISTS (
         SELECT 1 FROM conversation_members WHERE conversation_id = conv_id AND user_id = auth.uid()
     );
-$$ LANGUAGE sql SECURITY DEFINER SET search_path = '' STABLE;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp STABLE;
 
 -- Prevent non-admins from escalating their own role or changing their own status inappropriately,
 -- and prevent non-admins from changing another user's status.
@@ -70,11 +70,36 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 CREATE TRIGGER on_profiles_update
     BEFORE UPDATE ON profiles
     FOR EACH ROW EXECUTE FUNCTION prevent_profile_privilege_escalation();
+
+-- Helper: does the conversation have zero members (used for bootstrap check)?
+-- SECURITY DEFINER to bypass RLS so bootstrap count check sees true state.
+CREATE OR REPLACE FUNCTION conversation_has_no_members(conv_id UUID)
+RETURNS BOOLEAN AS $$
+    SELECT NOT EXISTS (
+        SELECT 1 FROM conversation_members WHERE conversation_id = conv_id
+    );
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp STABLE;
+
+-- Prevent non-admins from changing conversation ownership (created_by).
+CREATE OR REPLACE FUNCTION prevent_conversation_created_by_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Non-admins cannot change created_by
+    IF NEW.created_by IS DISTINCT FROM OLD.created_by AND NOT is_admin() THEN
+        RAISE EXCEPTION 'Only admins can change conversation ownership';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+CREATE TRIGGER on_conversations_update
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW EXECUTE FUNCTION prevent_conversation_created_by_change();
 
 -- 3. Policies.
 
@@ -112,7 +137,7 @@ CREATE POLICY members_insert ON conversation_members FOR INSERT TO authenticated
         (
             user_id = auth.uid() AND
             EXISTS (SELECT 1 FROM conversations c WHERE c.id = conversation_id AND c.created_by = auth.uid()) AND
-            NOT EXISTS (SELECT 1 FROM conversation_members cm WHERE cm.conversation_id = conversation_members.conversation_id)
+            conversation_has_no_members(conversation_id)
         )
     );
 CREATE POLICY members_delete ON conversation_members FOR DELETE TO authenticated
