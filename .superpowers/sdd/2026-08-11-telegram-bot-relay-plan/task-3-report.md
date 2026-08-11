@@ -17,7 +17,7 @@ Complete for Task 3 only.
 ## Commits
 
 - `88687c8` - `feat: add Telegram link and webhook flow`
-- Report commit follows this implementation commit.
+- `0cf061f` - `docs: record Telegram Task 3 report`
 
 ## Tests And Outputs
 
