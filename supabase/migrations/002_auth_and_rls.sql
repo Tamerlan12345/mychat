@@ -15,7 +15,7 @@ BEGIN
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'first_name', 'Сотрудник'),
         COALESCE(NEW.raw_user_meta_data->>'last_name', 'Новый'),
-        COALESCE(NEW.raw_user_meta_data->>'role', 'EMPLOYEE'),
+        'EMPLOYEE',
         'OFFLINE'
     );
     RETURN NEW;
@@ -68,6 +68,11 @@ BEGIN
     IF NEW.status IS DISTINCT FROM OLD.status AND auth.uid() != NEW.id AND NOT is_admin() THEN
         RAISE EXCEPTION 'Cannot change another user''s status';
     END IF;
+    -- Non-admins cannot un-block themselves (a blocked user must not be able to
+    -- silently erase their own block by re-authenticating and flipping status).
+    IF OLD.status = 'BLOCKED' AND NEW.status IS DISTINCT FROM OLD.status AND auth.uid() = NEW.id AND NOT is_admin() THEN
+        RAISE EXCEPTION 'Cannot change status while blocked';
+    END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
@@ -115,6 +120,14 @@ RETURNS audit_logs AS $$
 DECLARE
     result audit_logs;
 BEGIN
+    -- auth.uid() is NULL for an unauthenticated (anon) caller, and `NULL IS DISTINCT
+    -- FROM NULL` is false — so without this explicit check, an anonymous caller could
+    -- pass p_user_id => null and sail through the guard below, inserting a forged
+    -- audit row (null user_id, arbitrary user_email/action/ip).
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
     IF p_user_id IS DISTINCT FROM auth.uid() THEN
         RAISE EXCEPTION 'Cannot log an audit entry for another user';
     END IF;
@@ -125,6 +138,9 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+REVOKE EXECUTE ON FUNCTION insert_audit_log(UUID, VARCHAR, VARCHAR, VARCHAR, VARCHAR, JSONB, VARCHAR) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION insert_audit_log(UUID, VARCHAR, VARCHAR, VARCHAR, VARCHAR, JSONB, VARCHAR) TO authenticated;
 
 -- 3. Policies.
 
@@ -186,6 +202,10 @@ CREATE POLICY reactions_insert ON message_reactions FOR INSERT TO authenticated
     ));
 CREATE POLICY reactions_delete_own ON message_reactions FOR DELETE TO authenticated
     USING (user_id = auth.uid());
+-- addReaction upserts on (message_id, user_id, reaction); re-adding an existing
+-- reaction is an UPDATE under the hood and needs its own policy or it throws.
+CREATE POLICY reactions_update_own ON message_reactions FOR UPDATE TO authenticated
+    USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- attachments: scoped via the parent message's conversation.
 CREATE POLICY attachments_select ON attachments FOR SELECT TO authenticated
@@ -197,8 +217,9 @@ CREATE POLICY attachments_insert ON attachments FOR INSERT TO authenticated
 CREATE POLICY settings_owner ON user_settings FOR ALL TO authenticated
     USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
--- branding_config: readable by all authenticated users, writable only by admins.
-CREATE POLICY branding_select ON branding_config FOR SELECT TO authenticated USING (true);
+-- branding_config: readable by everyone, including signed-out visitors (it's the
+-- login screen's logo/colors — not sensitive data), writable only by admins.
+CREATE POLICY branding_select ON branding_config FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY branding_admin_write ON branding_config FOR UPDATE TO authenticated
     USING (is_admin()) WITH CHECK (is_admin());
 
@@ -226,3 +247,9 @@ CREATE POLICY attachments_bucket_write ON storage.objects FOR INSERT TO authenti
         bucket_id = 'attachments'
         AND is_conversation_member((storage.foldername(name))[1]::uuid)
     );
+
+-- 5. Realtime.
+-- The supabase_realtime publication starts empty in a fresh project — tables must be
+-- explicitly added before postgres_changes subscriptions receive anything.
+-- Enable Realtime for messages (subscribeToMessages relies on postgres_changes INSERT events).
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;

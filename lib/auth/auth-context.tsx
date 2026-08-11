@@ -62,6 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!profile) {
       return { success: false, error: 'Профиль пользователя не найден.' };
     }
+    if (profile.status === 'BLOCKED') {
+      await auth.signOut();
+      return { success: false, error: 'Ваш аккаунт заблокирован администратором.' };
+    }
 
     const updated = await UserService.setUserStatus(profile.id, 'ONLINE');
     setUser(updated);

@@ -15,6 +15,14 @@ Project → SQL Editor → New query. Paste and run, in this exact order:
 1. The full contents of `supabase/migrations/001_initial_schema.sql`
 2. The full contents of `supabase/migrations/002_auth_and_rls.sql`
 
+Migration 002 also adds the `messages` table to the `supabase_realtime` publication
+(`ALTER PUBLICATION supabase_realtime ADD TABLE messages;`) — this is required for
+live message delivery (`subscribeToMessages`) to work at all; a fresh Supabase project's
+publication starts empty. No separate manual dashboard step is needed for standard
+projects, but if your project's owner role ever lacks privileges to alter the
+publication, do it manually instead: Database → Replication → toggle on the `messages`
+table for the `supabase_realtime` publication.
+
 ## 3. Enable email auth
 
 Authentication → Providers → Email → make sure it's enabled (it is by default).

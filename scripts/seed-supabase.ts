@@ -1,7 +1,13 @@
 // scripts/seed-supabase.ts
 // Run with: npm run seed:supabase
 // Requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment.
+// tsx does not load .env files on its own, so we load .env.local explicitly here
+// (via an options object, not `dotenv/config`'s side-effect import, so the path works
+// identically across shells — no DOTENV_CONFIG_PATH env var needed in package.json).
+import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+
+config({ path: '.env.local' });
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

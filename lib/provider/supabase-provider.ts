@@ -114,6 +114,36 @@ export class SupabaseDataProvider implements IDataProvider {
     return getSupabaseClient();
   }
 
+  // Self-logs an audit entry attributed to the currently authenticated user, mirroring
+  // the mock provider's self-logging inside its mutating methods. Unlike the mock
+  // provider (which hardcodes a fake 'u1'/admin@demo.local actor because the provider
+  // interface doesn't receive the real caller's identity), this derives the actor from
+  // the live Supabase session so the row satisfies insert_audit_log's
+  // `p_user_id = auth.uid()` forgery guard. Best-effort: audit logging must never block
+  // the primary mutation it records, so failures are swallowed and logged.
+  private async selfLogAudit(
+    action: string,
+    target_type: string,
+    target_id?: string,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    try {
+      const { data: authData } = await this.client.auth.getUser();
+      const actor = authData?.user;
+      if (!actor) return;
+      await this.logAudit({
+        user_id: actor.id,
+        user_email: actor.email ?? '',
+        action,
+        target_type,
+        target_id,
+        metadata,
+      });
+    } catch (err) {
+      console.error(`selfLogAudit (${action}) failed:`, err);
+    }
+  }
+
   // --- USERS ---
   async getUsers(): Promise<User[]> {
     const { data, error } = await this.client.from('profiles').select('*, departments(name)').order('first_name');
@@ -161,12 +191,19 @@ export class SupabaseDataProvider implements IDataProvider {
       .select('*, departments(name)')
       .single();
     if (error) throw new Error(`updateUser failed: ${error.message}`);
+    await this.selfLogAudit(
+      updates.status === 'BLOCKED' ? 'ADMIN_BLOCKED_USER' : 'ADMIN_UPDATED_USER',
+      'USER',
+      id,
+      updates
+    );
     return mapProfileRow(data);
   }
 
   async deleteUser(id: string): Promise<boolean> {
     const { error } = await this.client.from('profiles').delete().eq('id', id);
     if (error) throw new Error(`deleteUser failed: ${error.message}`);
+    await this.selfLogAudit('ADMIN_DELETED_USER', 'USER', id);
     return true;
   }
 
@@ -291,13 +328,32 @@ export class SupabaseDataProvider implements IDataProvider {
       .single();
     if (error) throw new Error(`createConversation failed: ${error.message}`);
 
-    const memberIds = Array.from(new Set([...data.member_ids, data.created_by]));
-    const { error: memberError } = await this.client
+    // The members_insert RLS policy relies on STABLE helper functions
+    // (is_conversation_member / conversation_has_no_members) that only see rows
+    // committed before the current statement started. Inserting every member in one
+    // multi-row statement means only the creator's own bootstrap row can pass — every
+    // other row is evaluated against a snapshot where the creator isn't a member yet.
+    // Splitting into two statements lets the second insert see the creator's
+    // now-committed membership row and pass via the normal "existing member adds
+    // others" branch.
+    const otherMemberIds = Array.from(new Set(data.member_ids)).filter(id => id !== data.created_by);
+
+    const { error: creatorMemberError } = await this.client
       .from('conversation_members')
-      .insert(memberIds.map(userId => ({ conversation_id: convRow.id, user_id: userId })));
-    if (memberError) {
+      .insert({ conversation_id: convRow.id, user_id: data.created_by });
+    if (creatorMemberError) {
       await this.client.from('conversations').delete().eq('id', convRow.id);
-      throw new Error(`createConversation (members) failed: ${memberError.message}`);
+      throw new Error(`createConversation (members) failed: ${creatorMemberError.message}`);
+    }
+
+    if (otherMemberIds.length > 0) {
+      const { error: memberError } = await this.client
+        .from('conversation_members')
+        .insert(otherMemberIds.map(userId => ({ conversation_id: convRow.id, user_id: userId })));
+      if (memberError) {
+        await this.client.from('conversations').delete().eq('id', convRow.id);
+        throw new Error(`createConversation (members) failed: ${memberError.message}`);
+      }
     }
 
     return mapConversationRow(convRow);
@@ -434,9 +490,14 @@ export class SupabaseDataProvider implements IDataProvider {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         async (payload: any) => {
-          const full = await this.getMessages(conversationId);
-          const inserted = full.find(m => m.id === payload.new.id);
-          if (inserted) callback(inserted);
+          // Fetch just the inserted row instead of refetching the entire
+          // conversation's message list on every INSERT.
+          const { data, error } = await this.client
+            .from('messages')
+            .select(MESSAGE_SELECT)
+            .eq('id', payload.new.id)
+            .single();
+          if (!error && data) callback(mapMessageRow(data));
         }
       )
       .subscribe();
@@ -467,6 +528,8 @@ export class SupabaseDataProvider implements IDataProvider {
       event: 'branding_changed',
       payload: branding,
     });
+
+    await this.selfLogAudit('ADMIN_CHANGED_BRANDING', 'BRANDING', '1', config);
 
     return branding;
   }

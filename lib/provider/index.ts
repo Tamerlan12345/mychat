@@ -20,7 +20,10 @@ let cachedProvider: IDataProvider | null = null;
 
 export function getDataProvider(): IDataProvider {
   if (!cachedProvider) {
-    const mode = resolveProviderMode(process.env as Record<string, string | undefined>);
+    const mode = resolveProviderMode({
+      NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    });
     cachedProvider = mode === 'supabase' ? new SupabaseDataProvider() : globalDataProvider;
   }
   return cachedProvider;

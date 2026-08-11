@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 describe('getAuthProvider', () => {
   const ORIGINAL_ENV = { ...process.env };
@@ -22,5 +24,12 @@ describe('getAuthProvider', () => {
     const { getAuthProvider } = await import('./index');
     const { SupabaseAuthProvider } = await import('./supabase-auth-provider');
     expect(getAuthProvider()).toBeInstanceOf(SupabaseAuthProvider);
+  });
+
+  it('reads only the two literal NEXT_PUBLIC_* member expressions from process.env (required for Next.js client-bundle inlining), never the whole env object', () => {
+    const source = readFileSync(join(__dirname, 'index.ts'), 'utf-8');
+    expect(source).not.toMatch(/resolveProviderMode\(\s*process\.env\s*[,)]/);
+    expect(source).toMatch(/NEXT_PUBLIC_SUPABASE_URL:\s*process\.env\.NEXT_PUBLIC_SUPABASE_URL/);
+    expect(source).toMatch(/NEXT_PUBLIC_SUPABASE_ANON_KEY:\s*process\.env\.NEXT_PUBLIC_SUPABASE_ANON_KEY/);
   });
 });
