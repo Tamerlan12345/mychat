@@ -1,0 +1,150 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const rpc = vi.fn();
+const from = vi.fn();
+const client = { rpc, from };
+
+vi.mock('./server-client', () => ({
+  getTelegramServerClient: () => client,
+}));
+
+import {
+  claimTelegramLink,
+  completeOutbox,
+  createTelegramLink,
+  disconnectTelegramIdentity,
+  failOutbox,
+  getTelegramIdentity,
+  getTelegramRelayLogs,
+  ingestTelegramInbound,
+  leaseOutbox,
+  TelegramRepositoryError,
+} from './repository';
+
+describe('Telegram repository', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    from.mockReset();
+  });
+
+  it('persists only the hash when creating a link token', async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ insert });
+
+    const result = await createTelegramLink({
+      ownerProfileId: 'profile-1',
+      expiresAt: '2026-08-11T12:00:00.000Z',
+    });
+
+    expect(from).toHaveBeenCalledWith('telegram_link_tokens');
+    expect(insert).toHaveBeenCalledWith({
+      owner_profile_id: 'profile-1',
+      token_hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      expires_at: '2026-08-11T12:00:00.000Z',
+    });
+    expect(insert.mock.calls[0][0].token_hash).not.toBe(result.rawToken);
+    expect(result.rawToken).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('calls claim RPC with the migration parameter names', async () => {
+    rpc.mockResolvedValue({
+      data: [{
+        id: 'identity-1', profile_id: 'profile-1', telegram_user_id: 7,
+        telegram_chat_id: 8, username: 'relay', status: 'active',
+      }],
+      error: null,
+    });
+
+    await expect(claimTelegramLink({
+      tokenHash: 'a'.repeat(64),
+      telegramUserId: 7,
+      telegramChatId: 8,
+      username: 'relay',
+    })).resolves.toMatchObject({ id: 'identity-1', profile_id: 'profile-1' });
+
+    expect(rpc).toHaveBeenCalledWith('claim_telegram_link_token', {
+      p_token_hash: 'a'.repeat(64),
+      p_telegram_user_id: 7,
+      p_telegram_chat_id: 8,
+      p_username: 'relay',
+    });
+  });
+
+  it('calls inbound and outbox RPCs with exact migration shapes', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: { id: 'message-1' }, error: null })
+      .mockResolvedValueOnce({ data: [{ id: 'outbox-1' }], error: null })
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
+
+    await ingestTelegramInbound({
+      telegramUserId: 7, telegramChatId: 8, telegramMessageId: 9, content: 'hello',
+    });
+    await leaseOutbox({ limit: 4, leaseSeconds: 30 });
+    await completeOutbox({ id: 'outbox-1', leaseToken: 'lease-1', telegramMessageId: 10 });
+    await failOutbox({ id: 'outbox-1', leaseToken: 'lease-1', errorCode: 'RATE_LIMITED', retryAt: '2026-08-11T12:01:00.000Z' });
+
+    expect(rpc).toHaveBeenNthCalledWith(1, 'ingest_telegram_inbound', {
+      p_telegram_user_id: 7, p_telegram_chat_id: 8, p_telegram_message_id: 9, p_content: 'hello',
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'lease_telegram_outbox', {
+      p_limit: 4, p_lease_seconds: 30,
+    });
+    expect(rpc).toHaveBeenNthCalledWith(3, 'complete_telegram_outbox', {
+      p_id: 'outbox-1', p_lease_token: 'lease-1', p_telegram_message_id: 10,
+    });
+    expect(rpc).toHaveBeenNthCalledWith(4, 'fail_telegram_outbox', {
+      p_id: 'outbox-1', p_lease_token: 'lease-1', p_error_code: 'RATE_LIMITED',
+      p_retry_at: '2026-08-11T12:01:00.000Z',
+    });
+  });
+
+  it('reads identity and relay logs and disconnects only the requested profile', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'identity-1' }, error: null });
+    const identityEq = vi.fn().mockReturnValue({ maybeSingle });
+    const identitySelect = vi.fn().mockReturnValue({ eq: identityEq });
+    const logLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const logOrder = vi.fn().mockReturnValue({ limit: logLimit });
+    const logEq = vi.fn().mockReturnValue({ order: logOrder });
+    const logSelect = vi.fn().mockReturnValue({ eq: logEq });
+    const finalEq = vi.fn().mockResolvedValue({ error: null });
+    const statusEq = vi.fn().mockReturnValue({ eq: finalEq });
+    const profileEq = vi.fn().mockReturnValue({ eq: statusEq });
+    const update = vi.fn().mockReturnValue({ eq: profileEq });
+    from
+      .mockReturnValueOnce({ select: identitySelect })
+      .mockReturnValueOnce({ select: logSelect })
+      .mockReturnValueOnce({ update });
+
+    await getTelegramIdentity('profile-1');
+    await getTelegramRelayLogs('profile-1');
+    await disconnectTelegramIdentity('profile-1');
+
+    expect(from).toHaveBeenNthCalledWith(1, 'telegram_identities');
+    expect(identityEq).toHaveBeenCalledWith('profile_id', 'profile-1');
+    expect(from).toHaveBeenNthCalledWith(2, 'telegram_relay_log');
+    expect(logEq).toHaveBeenCalledWith('profile_id', 'profile-1');
+    expect(logLimit).toHaveBeenCalledWith(50);
+    expect(from).toHaveBeenNthCalledWith(3, 'telegram_identities');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'disconnected' }));
+    expect(profileEq).toHaveBeenCalledWith('profile_id', 'profile-1');
+    expect(statusEq).toHaveBeenCalledWith('status', 'active');
+  });
+
+  it('maps Supabase failures to safe internal codes', async () => {
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: '23505', message: 'duplicate Telegram ID 987654321 and token=secret' },
+    });
+
+    const error = await claimTelegramLink({
+      tokenHash: 'a'.repeat(64), telegramUserId: 7, telegramChatId: 8,
+    }).catch((value) => value);
+
+    expect(error).toBeInstanceOf(TelegramRepositoryError);
+    expect(error.code).toBe('CONFLICT');
+    expect(error.message).toBe('Telegram repository operation failed.');
+    expect(error.message).not.toContain('987654321');
+    expect(error.message).not.toContain('secret');
+  });
+});
