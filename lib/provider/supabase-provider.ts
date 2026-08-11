@@ -207,8 +207,19 @@ export class SupabaseDataProvider implements IDataProvider {
     return true;
   }
 
+  // Status-only changes (login → ONLINE, logout → OFFLINE, manual status picker) are
+  // routine presence updates, not admin activity — write directly rather than going
+  // through updateUser, so they don't get mislabeled as ADMIN_UPDATED_USER/
+  // ADMIN_BLOCKED_USER audit entries and flood audit_logs.
   async setUserStatus(id: string, status: User['status']): Promise<User> {
-    return this.updateUser(id, { status });
+    const { data, error } = await this.client
+      .from('profiles')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('*, departments(name)')
+      .single();
+    if (error) throw new Error(`setUserStatus failed: ${error.message}`);
+    return mapProfileRow(data);
   }
 
   // --- DEPARTMENTS ---

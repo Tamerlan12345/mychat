@@ -74,7 +74,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     if (user) {
-      await UserService.setUserStatus(user.id, 'OFFLINE');
+      try {
+        await UserService.setUserStatus(user.id, 'OFFLINE');
+      } catch {
+        // Status update can fail (e.g. the user was BLOCKED by an admin mid-session,
+        // which the on_profiles_update trigger's "cannot un-block yourself" guard
+        // rejects) — don't let that stop sign-out from completing, or the user would
+        // be stuck logged in with no way to clear their own session.
+      }
     }
     await getAuthProvider().signOut();
     setUser(null);

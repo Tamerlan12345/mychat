@@ -48,7 +48,7 @@ async function main() {
       email: demoUser.email,
       password: demoUser.password,
       email_confirm: true,
-      user_metadata: { first_name: demoUser.first_name, last_name: demoUser.last_name, role: demoUser.role },
+      user_metadata: { first_name: demoUser.first_name, last_name: demoUser.last_name },
     });
     if (error && !error.message.includes('already been registered')) throw error;
     if (!created?.user) {

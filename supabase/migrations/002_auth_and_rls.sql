@@ -60,8 +60,13 @@ $$ LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp STABLE;
 CREATE OR REPLACE FUNCTION prevent_profile_privilege_escalation()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Non-admins cannot change role fields (escalation protection)
-    IF NEW.role IS DISTINCT FROM OLD.role AND NOT is_admin() THEN
+    -- Non-admins cannot change role fields (escalation protection). The auth.uid() IS
+    -- NOT NULL check exempts service-role callers (e.g. the seed script bootstrapping
+    -- the first admin) — auth.uid() is NULL both for an unauthenticated request AND for
+    -- a service-role-authenticated request (service role bypasses JWT-based auth.uid()
+    -- entirely), so without this check there would be no way to ever create the first
+    -- admin, since is_admin() can never become true without one already existing.
+    IF NEW.role IS DISTINCT FROM OLD.role AND auth.uid() IS NOT NULL AND NOT is_admin() THEN
         RAISE EXCEPTION 'Only admins can change role';
     END IF;
     -- Non-admins cannot change another user's status
@@ -167,6 +172,12 @@ CREATE POLICY conversations_authenticated_insert ON conversations FOR INSERT TO 
 CREATE POLICY conversations_member_update ON conversations FOR UPDATE TO authenticated
     USING (is_conversation_member(id) OR is_admin())
     WITH CHECK (is_conversation_member(id) OR is_admin());
+-- Allow the creator (or an admin) to delete a conversation. Without this, there is no
+-- DELETE policy on conversations at all, so createConversation's cleanup-on-failure
+-- path (deleting the just-created conversation row if the member insert fails) silently
+-- matches zero rows under RLS and leaves an orphaned single-member conversation behind.
+CREATE POLICY conversations_creator_delete ON conversations FOR DELETE TO authenticated
+    USING (created_by = auth.uid() OR is_admin());
 
 -- conversation_members: visible to other members of the same conversation.
 -- Also allow the conversation creator to add themselves as the first member (bootstrap).
