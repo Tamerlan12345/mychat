@@ -4,12 +4,26 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const testUrl = process.env.SUPABASE_TEST_URL?.trim();
 const testServiceRoleKey = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY?.trim();
 const testAnonKey = process.env.SUPABASE_TEST_ANON_KEY?.trim();
-const canRun = Boolean(testUrl && testServiceRoleKey && testAnonKey);
+const ordinarySupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const testProjectMarker = process.env.SUPABASE_TEST_PROJECT_MARKER?.trim();
+const destructiveConfirmation = process.env.SUPABASE_TEST_ALLOW_DESTRUCTIVE?.trim();
+const destructiveConfirmationValue = 'I_UNDERSTAND_THIS_IS_A_DEDICATED_TEST_PROJECT';
+const safetyFailures = [
+  !testUrl && 'SUPABASE_TEST_URL is absent',
+  !testServiceRoleKey && 'SUPABASE_TEST_SERVICE_ROLE_KEY is absent',
+  !testAnonKey && 'SUPABASE_TEST_ANON_KEY is absent',
+  !testProjectMarker && 'SUPABASE_TEST_PROJECT_MARKER is absent',
+  destructiveConfirmation !== destructiveConfirmationValue
+    && 'SUPABASE_TEST_ALLOW_DESTRUCTIVE does not match the required confirmation',
+  testUrl && ordinarySupabaseUrl && testUrl === ordinarySupabaseUrl
+    && 'SUPABASE_TEST_URL must not equal NEXT_PUBLIC_SUPABASE_URL',
+].filter(Boolean);
+const canRun = safetyFailures.length === 0;
 
 if (!canRun) {
   console.info(
-    'SKIP: Supabase Telegram outbox integration tests require dedicated SUPABASE_TEST_URL, '
-      + 'SUPABASE_TEST_SERVICE_ROLE_KEY, and SUPABASE_TEST_ANON_KEY.',
+    'SKIP: Supabase Telegram outbox integration tests require a separate dedicated project. '
+      + `Safety checks failed: ${safetyFailures.join('; ')}.`,
   );
 }
 

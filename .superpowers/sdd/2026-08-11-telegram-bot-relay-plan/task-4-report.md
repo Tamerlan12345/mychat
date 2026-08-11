@@ -59,9 +59,13 @@ added.
 - The Bot API timeout test verifies abort propagation and the safe `TIMEOUT`
   error without exposing credentials or message data.
 - `supabase/telegram-outbox.integration.test.ts` is optional and runs only
-  when `SUPABASE_TEST_URL`, `SUPABASE_TEST_SERVICE_ROLE_KEY`, and
-  `SUPABASE_TEST_ANON_KEY` are all present. Without them it emits a clear skip
-  message. The tests cover direct eligibility, `OFFLINE`/`AWAY` behavior,
+  when separate test credentials, a non-empty
+  `SUPABASE_TEST_PROJECT_MARKER`, and the exact
+  `SUPABASE_TEST_ALLOW_DESTRUCTIVE=I_UNDERSTAND_THIS_IS_A_DEDICATED_TEST_PROJECT`
+  confirmation are present. It also rejects a test URL equal to
+  `NEXT_PUBLIC_SUPABASE_URL`; otherwise it emits a clear skip message before
+  any service-role mutation or deletion. The tests cover direct eligibility,
+  `OFFLINE`/`AWAY` behavior,
   connected/settings-disabled exclusion, trigger-backed atomic enqueue,
   idempotency, authenticated RLS reads, denied outbox/RPC access, stale lease
   reclaim/token protection, and concurrent lease exclusion.
@@ -89,7 +93,7 @@ added.
 ### Verification
 
 - `npx vitest run lib/telegram/outbox-worker.test.ts app/api/telegram/worker/route.test.ts lib/telegram/bot-api.test.ts lib/telegram/config.test.ts`: passed, 55 tests.
-- `npx vitest run supabase/telegram-outbox.integration.test.ts`: skipped, 5 tests, because the three optional Supabase test variables were absent.
+- `npx vitest run supabase/telegram-outbox.integration.test.ts`: skipped, 5 tests, because the dedicated-project safety marker and confirmation were absent; no service-role operation ran.
 - `npm run test`: passed, 15 files, 136 tests; 1 optional file and 5 tests skipped.
 - `npx tsc --noEmit`: passed after the completed build generated `.next/types`.
 - `npm run build`: passed.
@@ -104,4 +108,5 @@ added.
   later duplicate remains possible without a provider-side reconciliation key.
 - The optional integration suite requires a migrated dedicated Supabase
   project and real test credentials; it was not executed against a live
-  project in this environment.
+  project in this environment. The destructive test guard also requires the
+  explicit project marker and confirmation documented above.
