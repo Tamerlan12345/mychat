@@ -13,6 +13,9 @@
 # production
 /build
 /dist
+dist-electron/
+dist-installer/
+*.tsbuildinfo
 
 # misc
 .DS_Store
