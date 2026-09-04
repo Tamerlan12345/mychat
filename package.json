@@ -1,6 +1,8 @@
 {
   "name": "corporate-chat",
   "version": "1.0.0",
+  "description": "Centras Corporate Chat Client",
+  "author": "Centras",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {

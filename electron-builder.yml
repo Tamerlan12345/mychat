@@ -6,6 +6,7 @@ directories:
 files:
   - dist-electron/**/*
   - .next/**/*
+  - "!**/.next/cache/**"
   - public/**/*
   - package.json
 win:
