@@ -10,6 +10,20 @@ let localServer: http.Server | null = null;
 let appOrigin = '';
 
 /**
+ * Validate vault key against prototype pollution and invalid input
+ */
+export function isValidVaultKey(key: unknown): key is string {
+  if (typeof key !== 'string' || key.trim() === '') {
+    return false;
+  }
+  const forbidden = ['__proto__', 'constructor', 'prototype'];
+  if (forbidden.includes(key)) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Vault persistence for DPAPI-encrypted secrets
  */
 export function getVaultPath(): string {
@@ -20,17 +34,23 @@ export function readVault(): Record<string, string> {
   const vaultPath = getVaultPath();
   try {
     if (!fs.existsSync(vaultPath)) {
-      return {};
+      return Object.create(null);
     }
     const raw = fs.readFileSync(vaultPath, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null) {
-      return parsed;
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      const safeRecord: Record<string, string> = Object.create(null);
+      for (const [k, v] of Object.entries(parsed)) {
+        if (isValidVaultKey(k) && typeof v === 'string') {
+          safeRecord[k] = v;
+        }
+      }
+      return safeRecord;
     }
-    return {};
+    return Object.create(null);
   } catch (err) {
     console.error('Failed to read vault file:', err);
-    return {};
+    return Object.create(null);
   }
 }
 
@@ -46,6 +66,9 @@ export function writeVault(data: Record<string, string>): void {
 }
 
 export async function saveSecret(key: string, value: string): Promise<boolean> {
+  if (!isValidVaultKey(key) || typeof value !== 'string') {
+    return false;
+  }
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('safeStorage encryption is not available on this system');
     return false;
@@ -63,6 +86,9 @@ export async function saveSecret(key: string, value: string): Promise<boolean> {
 }
 
 export async function getSecret(key: string): Promise<string | null> {
+  if (!isValidVaultKey(key)) {
+    return null;
+  }
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('safeStorage encryption is not available on this system');
     return null;
@@ -70,7 +96,7 @@ export async function getSecret(key: string): Promise<string | null> {
   try {
     const vault = readVault();
     const encoded = vault[key];
-    if (!encoded) {
+    if (!encoded || typeof encoded !== 'string') {
       return null;
     }
     const buffer = Buffer.from(encoded, 'base64');
@@ -82,6 +108,9 @@ export async function getSecret(key: string): Promise<string | null> {
 }
 
 export async function removeSecret(key: string): Promise<boolean> {
+  if (!isValidVaultKey(key)) {
+    return false;
+  }
   try {
     const vault = readVault();
     if (key in vault) {
@@ -96,7 +125,19 @@ export async function removeSecret(key: string): Promise<boolean> {
 }
 
 /**
- * Navigation restriction guard
+ * Protocol validation on shell.openExternal
+ */
+export function safeOpenExternal(rawUrl: string): void {
+  try {
+    const parsed = new URL(rawUrl);
+    if (['https:', 'http:', 'mailto:'].includes(parsed.protocol)) {
+      void shell.openExternal(rawUrl);
+    }
+  } catch {}
+}
+
+/**
+ * Navigation restriction guard with strict origin and dev-port binding
  */
 export function isAllowedLocalUrl(targetUrl: string): boolean {
   try {
@@ -107,8 +148,13 @@ export function isAllowedLocalUrl(targetUrl: string): boolean {
         return true;
       }
     }
-    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
-      return true;
+    // In development mode, only allow explicitly configured loopback port 3000
+    const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
+    if (isDev) {
+      const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      if (isLoopback && (parsed.port === '3000' || parsed.port === '')) {
+        return true;
+      }
     }
     return false;
   } catch {
@@ -117,7 +163,7 @@ export function isAllowedLocalUrl(targetUrl: string): boolean {
 }
 
 /**
- * Resolve local development or production server port
+ * Resolve local development or production server port with path-traversal defended file serving
  */
 async function resolveServerUrl(): Promise<string> {
   if (process.env.ELECTRON_START_URL) {
@@ -133,8 +179,11 @@ async function resolveServerUrl(): Promise<string> {
     localServer = http.createServer((req, res) => {
       const host = req.headers.host || '127.0.0.1';
       const reqUrl = new URL(req.url || '/', `http://${host}`);
-      const filePath = path.join(__dirname, '..', 'public', reqUrl.pathname);
-      if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      const publicDir = path.resolve(__dirname, '..', 'public');
+      const safePath = path.normalize(reqUrl.pathname).replace(/^(\.\.[/\\])+/, '');
+      const filePath = path.resolve(publicDir, '.' + safePath);
+
+      if (filePath.startsWith(publicDir) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const stream = fs.createReadStream(filePath);
         return stream.pipe(res);
       }
@@ -171,6 +220,9 @@ function registerIpcHandlers(): void {
       key = args[0];
       value = args[1];
     }
+    if (!isValidVaultKey(key) || typeof value !== 'string') {
+      return false;
+    }
     return saveSecret(key, value);
   });
 
@@ -184,6 +236,9 @@ function registerIpcHandlers(): void {
       key = args[0];
       value = args[1];
     }
+    if (!isValidVaultKey(key) || typeof value !== 'string') {
+      return false;
+    }
     return saveSecret(key, value);
   });
 
@@ -191,6 +246,9 @@ function registerIpcHandlers(): void {
     const key = (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && 'key' in args[0])
       ? args[0].key
       : args[0];
+    if (!isValidVaultKey(key)) {
+      return null;
+    }
     return getSecret(key);
   });
 
@@ -198,6 +256,9 @@ function registerIpcHandlers(): void {
     const key = (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && 'key' in args[0])
       ? args[0].key
       : args[0];
+    if (!isValidVaultKey(key)) {
+      return null;
+    }
     return getSecret(key);
   });
 
@@ -205,6 +266,9 @@ function registerIpcHandlers(): void {
     const key = (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && 'key' in args[0])
       ? args[0].key
       : args[0];
+    if (!isValidVaultKey(key)) {
+      return false;
+    }
     return removeSecret(key);
   });
 
@@ -345,9 +409,9 @@ async function createWindow(): Promise<void> {
     });
   }
 
-  // Restrict child window creation and route external URLs to system browser
+  // Restrict child window creation and route external URLs safely to system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    safeOpenExternal(url);
     return { action: 'deny' };
   });
 
@@ -355,7 +419,7 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedLocalUrl(url)) {
       event.preventDefault();
-      shell.openExternal(url);
+      safeOpenExternal(url);
     }
   });
 

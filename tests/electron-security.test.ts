@@ -16,7 +16,7 @@ describe('Electron Security Hardening Invariants', () => {
     expect(content).toContain('webSecurity: true');
   });
 
-  it('restricts external navigation and window opening', () => {
+  it('restricts external navigation and window opening with protocol validation', () => {
     expect(fs.existsSync(mainPath)).toBe(true);
     const content = fs.readFileSync(mainPath, 'utf-8');
 
@@ -24,6 +24,18 @@ describe('Electron Security Hardening Invariants', () => {
     expect(content).toContain('openExternal');
     expect(content).toContain('will-navigate');
     expect(content).toMatch(/action:\s*['"]deny['"]/);
+    expect(content).toContain('safeOpenExternal');
+    expect(content).toContain("'https:'");
+    expect(content).toContain("'http:'");
+    expect(content).toContain("'mailto:'");
+  });
+
+  it('restricts loopback navigation to allowed dev port instead of arbitrary ports', () => {
+    expect(fs.existsSync(mainPath)).toBe(true);
+    const content = fs.readFileSync(mainPath, 'utf-8');
+
+    expect(content).toContain('isAllowedLocalUrl');
+    expect(content).toContain("'3000'");
   });
 
   it('enforces single instance lock to prevent duplicate processes', () => {
@@ -42,7 +54,7 @@ describe('Electron Security Hardening Invariants', () => {
     expect(content).toContain('closeDevTools');
   });
 
-  it('registers safeStorage DPAPI IPC handlers in main.ts', () => {
+  it('registers safeStorage DPAPI IPC handlers with prototype pollution protection in main.ts', () => {
     expect(fs.existsSync(mainPath)).toBe(true);
     const content = fs.readFileSync(mainPath, 'utf-8');
 
@@ -53,6 +65,16 @@ describe('Electron Security Hardening Invariants', () => {
     expect(content).toContain('safeStorage.isEncryptionAvailable()');
     expect(content).toContain('safeStorage.encryptString');
     expect(content).toContain('safeStorage.decryptString');
+    expect(content).toContain('isValidVaultKey');
+    expect(content).toContain('__proto__');
+  });
+
+  it('enforces path traversal defense on static file serving in production', () => {
+    expect(fs.existsSync(mainPath)).toBe(true);
+    const content = fs.readFileSync(mainPath, 'utf-8');
+
+    expect(content).toContain('publicDir');
+    expect(content).toContain('startsWith(publicDir)');
   });
 
   it('registers utility IPC handlers for platform info, badge count, and ping', () => {
