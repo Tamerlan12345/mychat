@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, Users, Building2, Lock, Palette, FileText, Settings, ArrowLeft } from 'lucide-react';
+import { Shield, Users, Building2, Lock, Palette, FileText, Settings, ArrowLeft, Send } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 
 export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -35,6 +35,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
     { href: '/admin/roles', label: 'Роли', icon: Lock },
     { href: '/admin/branding', label: 'Брендинг', icon: Palette },
     { href: '/admin/audit', label: 'Журнал аудита', icon: FileText },
+    { href: '/telegram', label: 'Telegram Бот', icon: Send },
     { href: '/admin/settings', label: 'Настройки', icon: Settings },
   ];
 

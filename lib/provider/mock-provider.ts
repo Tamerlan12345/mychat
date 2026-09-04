@@ -94,7 +94,7 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c1',
     type: 'CHANNEL',
-    name: '📢 Новости',
+    name: '📢 Новости и события',
     description: 'Главный новостной канал компании Centras',
     created_by: 'u1',
     is_private: false,
@@ -104,8 +104,8 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c2',
     type: 'CHANNEL',
-    name: '💻 IT',
-    description: 'Обсуждение IT инфраструктуры и развертывания',
+    name: '💻 IT & Архитектура',
+    description: 'Обсуждение IT инфраструктуры, серверов и релизов',
     created_by: 'u1',
     is_private: false,
     created_at: new Date().toISOString(),
@@ -114,8 +114,8 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c3',
     type: 'CHANNEL',
-    name: '🤖 AI',
-    description: 'Канал искусственного интеллекта',
+    name: '🤖 AI Лаборатория',
+    description: 'Разработка и внедрение моделей искусственного интеллекта',
     created_by: 'u2',
     is_private: false,
     created_at: new Date().toISOString(),
@@ -124,9 +124,19 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c4',
     type: 'GROUP',
-    name: '👥 AI Project',
-    description: 'Рабочая группа проекта AI Assistant',
+    name: '👥 Проект: Десктоп-клиент',
+    description: 'Рабочая группа разработки защищённого Windows приложения',
     created_by: 'u2',
+    is_private: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'c6',
+    type: 'GROUP',
+    name: '👥 Проект: Безопасность и RLS',
+    description: 'Рабочая группа по криптозащите и аудиту прав доступа',
+    created_by: 'u1',
     is_private: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -191,7 +201,7 @@ const INITIAL_MESSAGES: Message[] = [
 
 const INITIAL_BRANDING: BrandingConfig = {
   company_name: 'Centras Chat',
-  app_title: 'Corporate Messenger MVP',
+  app_title: 'Centras Workspace',
   logo_url: '',
   logo_small_url: '',
   favicon_url: '',
