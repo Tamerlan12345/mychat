@@ -2,16 +2,18 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, ShieldCheck, Server } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { ServerConnectionDialog } from '@/components/desktop/server-connection-dialog';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('admin@demo.local');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isServerDialogOpen, setIsServerDialogOpen] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
 
@@ -42,6 +44,18 @@ export default function LoginPage() {
       {/* Background Glow Overlay */}
       <div className="absolute w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl -top-32 -left-32 pointer-events-none" />
       <div className="absolute w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl -bottom-32 -right-32 pointer-events-none" />
+
+      <div className="absolute top-4 right-4 z-20">
+        <button
+          type="button"
+          onClick={() => setIsServerDialogOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 bg-slate-900/80 hover:bg-slate-800 border border-slate-800 rounded-lg transition-colors shadow-sm"
+          title="Настройка подключения к серверу"
+        >
+          <Server className="w-3.5 h-3.5" />
+          <span>Настройка сервера</span>
+        </button>
+      </div>
 
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl z-10 space-y-6">
         {/* Branding Logo Header */}
@@ -118,11 +132,25 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Шифрование сессии & RLS Защита</span>
+        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Шифрование сессии & RLS Защита</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsServerDialogOpen(true)}
+            className="text-slate-400 hover:text-slate-200 underline transition-colors"
+          >
+            Настройка сервера
+          </button>
         </div>
       </div>
+
+      <ServerConnectionDialog
+        isOpen={isServerDialogOpen}
+        onClose={() => setIsServerDialogOpen(false)}
+      />
     </div>
   );
 }

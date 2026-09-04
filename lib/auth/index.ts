@@ -15,3 +15,7 @@ export function getAuthProvider(): IAuthProvider {
   }
   return cached;
 }
+
+export function resetAuthProvider(): void {
+  cached = null;
+}

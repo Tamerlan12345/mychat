@@ -32,6 +32,12 @@ export interface ISecureStorage {
   clear(): Promise<void>;
 }
 
+export interface ServerConnectionConfig {
+  serverUrl: string;
+  anonKey: string;
+  isCustom: boolean;
+}
+
 declare global {
   interface Window {
     desktopBridge?: DesktopBridge;

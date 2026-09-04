@@ -26,6 +26,24 @@ describe('getAuthProvider', () => {
     expect(getAuthProvider()).toBeInstanceOf(SupabaseAuthProvider);
   });
 
+  it('invalidates cached auth provider when resetAuthProvider is called', async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const { getAuthProvider, resetAuthProvider } = await import('./index');
+    const { MockAuthProvider } = await import('./mock-auth-provider');
+    const { SupabaseAuthProvider } = await import('./supabase-auth-provider');
+
+    expect(getAuthProvider()).toBeInstanceOf(MockAuthProvider);
+
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+
+    expect(getAuthProvider()).toBeInstanceOf(MockAuthProvider);
+
+    resetAuthProvider();
+    expect(getAuthProvider()).toBeInstanceOf(SupabaseAuthProvider);
+  });
+
   it('reads only the two literal NEXT_PUBLIC_* member expressions from process.env (required for Next.js client-bundle inlining), never the whole env object', () => {
     const source = readFileSync(join(__dirname, 'index.ts'), 'utf-8');
     expect(source).not.toMatch(/resolveProviderMode\(\s*process\.env\s*[,)]/);

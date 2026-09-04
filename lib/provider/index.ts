@@ -1,6 +1,7 @@
 import type { IDataProvider } from './data-provider';
 import { globalDataProvider } from './mock-provider';
 import { SupabaseDataProvider } from './supabase-provider';
+import { resetSupabaseClient } from './supabase-client';
 
 export type ProviderMode = 'mock' | 'supabase';
 
@@ -27,4 +28,9 @@ export function getDataProvider(): IDataProvider {
     cachedProvider = mode === 'supabase' ? new SupabaseDataProvider() : globalDataProvider;
   }
   return cachedProvider;
+}
+
+export function resetDataProvider(): void {
+  cachedProvider = null;
+  resetSupabaseClient();
 }

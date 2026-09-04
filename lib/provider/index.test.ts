@@ -54,6 +54,24 @@ describe('getDataProvider', () => {
     expect(getDataProvider()).toBeInstanceOf(SupabaseDataProvider);
   });
 
+  it('invalidates cached provider when resetDataProvider is called', async () => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const { getDataProvider, resetDataProvider } = await import('./index');
+    const { globalDataProvider } = await import('./mock-provider');
+    const { SupabaseDataProvider } = await import('./supabase-provider');
+
+    expect(getDataProvider()).toBe(globalDataProvider);
+
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+
+    expect(getDataProvider()).toBe(globalDataProvider);
+
+    resetDataProvider();
+    expect(getDataProvider()).toBeInstanceOf(SupabaseDataProvider);
+  });
+
   it('reads only the two literal NEXT_PUBLIC_* member expressions from process.env (required for Next.js client-bundle inlining), never the whole env object', () => {
     // Next.js only statically inlines literal `process.env.NEXT_PUBLIC_X` member
     // expressions in client bundles. Passing `process.env` as a whole object bypasses

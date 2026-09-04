@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCircle2, RefreshCw, Save, XCircle } from 'lucide-react';
+import { Bell, CheckCircle2, RefreshCw, Save, XCircle, Server } from 'lucide-react';
 import { Sidebar } from '@/components/sidebar/sidebar';
 import { useAuth } from '@/lib/auth/auth-context';
 import { TelegramService } from '@/services/telegram-service';
 import { Button } from '@/components/ui/button';
+import { ServerConnectionDialog } from '@/components/desktop/server-connection-dialog';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -17,6 +18,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isServerDialogOpen, setIsServerDialogOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -173,8 +175,36 @@ export default function SettingsPage() {
               </div>
             </section>
           )}
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Server className="h-4 w-4 text-blue-600" />
+                  <h2 className="text-sm font-semibold text-slate-900">Подключение к серверу</h2>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Настройка корпоративного сервера (Supabase / Postgres Gateway) и ключей доступа.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsServerDialogOpen(true)}
+              >
+                <Server className="mr-2 h-4 w-4" />
+                Настройка сервера
+              </Button>
+            </div>
+          </section>
         </div>
       </main>
+
+      <ServerConnectionDialog
+        isOpen={isServerDialogOpen}
+        onClose={() => setIsServerDialogOpen(false)}
+      />
     </div>
   );
 }
