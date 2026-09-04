@@ -1,9 +1,10 @@
 # PROJECT.md — Holding Corporate Chat
 
 ## Architecture
-- **Type**: Web Application (Next.js 14 App Router, TypeScript, Tailwind CSS) + Desktop Client Readiness (Tauri layer).
+- **Type**: Web Application (Next.js 14 App Router, TypeScript, Tailwind CSS) + Standalone Windows Desktop Client (Electron 32, NSIS Installer, Windows DPAPI `safeStorage`).
 - **Core Abstraction**: Layered Architecture strictly following Technical Specification §3:
   `UI` -> `Application Services` -> `Chat API` -> `Data Provider` -> `Supabase PostgreSQL / Realtime / Storage` (with seamless upgrade path to Matrix API / Synapse).
+- **Zero-Trust Connection Architecture**: Desktop client connects over TLS to Supabase API endpoints (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) or in-memory mock fallback; automated build pipeline actively blocks database master credentials (`DATABASE_URL`, `service_role`).
 - **Branding Engine**: Dynamic CSS Variables `:root` injection without full application rebuild.
 - **Telegram Integration**: Server-only Telegram Bot API relay for account linking, direct-message notifications, and private text inbound relay.
 
@@ -25,6 +26,7 @@
 | Electron Preload Bridge | `electron/preload.ts` | Context isolation bridge exposing typed `window.desktopBridge` with whitelisted IPC | Electron `contextBridge` | Web UI / Desktop adapters |
 | Secure Storage Adapter | `lib/desktop/secure-storage.ts` | DPAPI encrypted credential vault with web localStorage fallback | Desktop Bridge, Browser Storage | Connection Manager, Auth |
 | Desktop Connection Manager | `lib/desktop/connection-manager.ts` | Dynamic server URL/key configuration, DPAPI persistence, health test | Secure Storage, Providers | Login UI, Settings UI, Server Dialog |
+| Server Connection Dialog | `components/desktop/server-connection-dialog.tsx` | Modal dialog for runtime server URL & anon key configuration with connectivity test | Connection Manager | Login UI, Settings UI |
 
 ## Decisions Log
 | # | Date | Decision | Context | Alternatives rejected | Reversal cost |
@@ -34,7 +36,9 @@
 | 3 | 2026-08-10 | In-Memory & LocalStorage Fallback Provider | Ensures instant standalone demo execution without mandatory external Supabase project keys | Hard dependency on live cloud credentials | Low |
 | 4 | 2026-08-10 | Git Ignore Policy | Standardize ignored technical files (node_modules, .next, .superpowers, logs, env) | Committing build artifacts and secret keys | Low |
 | 5 | 2026-08-11 | Real Supabase Provider Selected at Runtime via `resolveProviderMode()` | Tech Spec §3 requires a production-grade backend (real Postgres Auth/RLS/Realtime) while keeping the zero-config mock demo path working out of the box | Always requiring live Supabase credentials; a build-time flag instead of a runtime env check | Medium |
-| 6 | 2026-09-04 | Hardened Electron Architecture with Windows DPAPI Vault | Desktop application requirements dictate strict isolation (`nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, `webSecurity: true`) and DPAPI hardware-backed encryption (`safeStorage`) for credentials | Custom native C++ addons (Node 24 compatibility issues), plaintext LocalStorage for tokens | Medium |
+| 6 | 2026-09-04 | Electron + NSIS Standalone Installer | Desktop application distribution requires single-click/guided Windows installer with ASAR packaging, process isolation (`nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`), and background HTTP serving without external dependencies | Tauri (requires Rust toolchain and MSVC), PWA (lacks OS integration, single-instance lock, tray, hardware DPAPI), raw zip distribution | High |
+| 7 | 2026-09-04 | Windows DPAPI SafeStorage Vault for Credentials | Corporate security requires enterprise-grade hardware/OS-level encryption for saved authentication tokens and Supabase keys on disk | Plaintext LocalStorage / unencrypted SQLite / native keytar C++ addon (fails on Node 24 due to ABI breakage) | Medium |
+| 8 | 2026-09-04 | Zero-Trust Leak Detection in Automated Packaging | Prevent accidental embedding of server secrets (database passwords, `service_role` JWTs, bot tokens) into client desktop installer artifacts during automated builds | Manual pre-release checklist, trust-based environment separation without automated validation | Low |
 
 ## Task Log
 | # | Task | Mode | Status | Files | Goals satisfied (G1–G4) | Notes |
@@ -47,9 +51,7 @@
 | 6 | Telegram Bot API relay | Feature | Completed | `lib/telegram/*`, `app/api/telegram/*`, `supabase/migrations/003_telegram_bot_relay.sql`, `components/telegram/*` | G1, G2, G4 | Bot API linking, direct-message notifications, private text inbound relay, and retryable outbox; live credentials still require manual setup |
 | 7 | Production Git Configuration | Refactor | Completed | `.gitignore` | G3, G4 | Exclusion of technical & temporary files |
 | 8 | Backend Foundation — real Supabase provider (Auth, Postgres, Realtime) | Feature | Completed | `lib/provider/{index,supabase-client,supabase-provider}.ts`, `lib/auth/{index,auth-provider,mock-auth-provider,supabase-auth-provider}.ts`, `supabase/migrations/002_auth_and_rls.sql`, `app/api/audit-ip/route.ts`, `scripts/seed-supabase.ts`, `docs/SUPABASE_SETUP.md` | G1, G2, G3, G4 | `resolveProviderMode()` picks `mock` (zero-config, unchanged demo behavior) or `supabase` (real password auth, RLS-backed Postgres, Realtime broadcast) from `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`; `getDataProvider()`/`getAuthProvider()` factories wired into all 5 services + auth context; `SupabaseDataProvider` fully implements `IDataProvider` (35 members); RLS migration went through 2 fix rounds (privilege escalation, missing INSERT policy, member-bootstrap deadlock, audit-log RPC forgery — all closed). Mock provider files untouched (`mock-provider.ts`, `mock-auth-provider.ts` byte-identical since initial commit), so the zero-config demo path is unaffected. Full verification counts are recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`; real-Supabase manual pass not run — no project credentials in this session. |
-| 9 | Hardened Electron Main Process & Preload Bridge (Desktop Plan Task 2) | Feature | Completed | `electron/main.ts`, `electron/preload.ts`, `tests/electron-security.test.ts` | G1, G2, G3, G4 | Hardened security flags, single instance lock, navigation denial / external routing, safeStorage DPAPI vault handlers, typed preload bridge, 158/158 tests passing |
-| 10 | Windows DPAPI Secure Storage Adapter (Desktop Plan Task 3) | Feature | Completed | `lib/desktop/secure-storage.ts`, `lib/desktop/types.ts`, `lib/desktop/secure-storage.test.ts` | G1, G2, G3, G4 | DPAPI vault delegation with localStorage and SSR in-memory fallbacks, prototype pollution defense, 171/171 tests passing |
-| 11 | Server Connection Wizard & Dynamic Config Manager (Desktop Plan Task 4) | Feature | Completed | `lib/desktop/connection-manager.ts`, `lib/desktop/connection-manager.test.ts`, `lib/provider/index.ts`, `lib/auth/index.ts`, `components/desktop/server-connection-dialog.tsx`, `app/login/page.tsx`, `app/settings/page.tsx` | G1, G2, G3, G4 | Dynamic server URL/anon key configuration, DPAPI persistence, connection test ping, cache invalidation via resetDataProvider/resetAuthProvider, 189/189 tests passing |
+| 9 | Secure Windows Desktop Application & Automated Installer (.exe) | Feature | Completed | `electron/*`, `lib/desktop/*`, `components/desktop/*`, `scripts/build-installer.ts`, `electron-builder.yml`, `docs/DESKTOP_INSTALLER.md` | G1, G2, G3, G4 | Hardened Electron shell (`nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`), Windows DPAPI `safeStorage` encryption for credentials, dynamic server connection wizard with cache invalidation, automated build pipeline with Zero-Trust leak detection, NSIS installer generation (`Centras Chat Setup 1.0.0.exe`, 118.5 MB), 189/189 tests passing. |
 
 ## Known Issues & Technical Debt
 | Issue | Severity | Location | Impact on G1 / G3 / G4 | Owner | Plan |
@@ -62,8 +64,11 @@
 
 ## Build & Test Commands
 - `npm run dev`: Launch local Next.js development server
-- `npm run build`: Production build compilation (Verified 2026-08-11: Next.js 14.2.35, all routes compiled clean incl. the `/api/audit-ip` route added in the Backend Foundation plan)
-- `npm run test`: Vitest suite (Task 6 verification count is recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`)
+- `npm run build`: Production build compilation (Verified 2026-09-05: Next.js 14.2.35, all 17 routes compiled clean)
+- `npm run test`: Vitest suite (Verified 2026-09-05: 189 tests passing, 0 failures, 9 skipped integration tests)
 - `npm run desktop:compile`: Compile Electron TypeScript main & preload files to `dist-electron/` (`tsc -p electron/tsconfig.json`)
+- `npm run desktop:dev`: Launch local Next.js dev server concurrently with Electron desktop client
+- `npm run desktop:build`: Full desktop build (`next build` + `tsc -p electron/tsconfig.json`)
+- `npm run build:installer`: Automated desktop packaging pipeline with Zero-Trust leak scan, compiler execution, and NSIS `.exe` generation
 - `npm run lint`: not currently runnable non-interactively — see Known Issues (no ESLint config in repo)
 - `npm run seed:supabase`: seeds a real Supabase project per `docs/SUPABASE_SETUP.md` (requires `.env.local` with project credentials, not available in automated sessions)
