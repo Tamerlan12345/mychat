@@ -11,6 +11,11 @@ const ALLOWED_CHANNELS = [
   'desktop:get-platform-info',
   'desktop:set-badge-count',
   'desktop:ping-server',
+  'desktop:window-minimize',
+  'desktop:window-maximize',
+  'desktop:window-close',
+  'desktop:window-is-maximized',
+  'desktop:show-notification',
 ] as const;
 
 type AllowedChannel = (typeof ALLOWED_CHANNELS)[number];
@@ -35,6 +40,11 @@ export interface DesktopBridge {
   }>;
   setBadgeCount: (count: number) => Promise<boolean>;
   pingServer: (url: string) => Promise<{ ok: boolean; status?: number; error?: string }>;
+  minimizeWindow: () => Promise<boolean>;
+  maximizeWindow: () => Promise<boolean>;
+  closeWindow: () => Promise<boolean>;
+  isWindowMaximized: () => Promise<boolean>;
+  showNotification: (options: { title: string; body: string; silent?: boolean }) => Promise<boolean>;
 }
 
 const desktopBridge: DesktopBridge = {
@@ -88,6 +98,34 @@ const desktopBridge: DesktopBridge = {
     }
     validateChannel('desktop:ping-server');
     return ipcRenderer.invoke('desktop:ping-server', { url });
+  },
+
+  minimizeWindow: async (): Promise<boolean> => {
+    validateChannel('desktop:window-minimize');
+    return ipcRenderer.invoke('desktop:window-minimize');
+  },
+
+  maximizeWindow: async (): Promise<boolean> => {
+    validateChannel('desktop:window-maximize');
+    return ipcRenderer.invoke('desktop:window-maximize');
+  },
+
+  closeWindow: async (): Promise<boolean> => {
+    validateChannel('desktop:window-close');
+    return ipcRenderer.invoke('desktop:window-close');
+  },
+
+  isWindowMaximized: async (): Promise<boolean> => {
+    validateChannel('desktop:window-is-maximized');
+    return ipcRenderer.invoke('desktop:window-is-maximized');
+  },
+
+  showNotification: async (options: { title: string; body: string; silent?: boolean }): Promise<boolean> => {
+    if (!options || typeof options.title !== 'string') {
+      throw new Error('Notification options must have a title string');
+    }
+    validateChannel('desktop:show-notification');
+    return ipcRenderer.invoke('desktop:show-notification', options);
   },
 };
 

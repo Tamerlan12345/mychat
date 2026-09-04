@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Hash, Users, Lock, Search, Phone, Video, MoreVertical, Sparkles } from 'lucide-react';
+import { Users, Lock, Search, Phone, Video, Sparkles, Bell, Volume2 } from 'lucide-react';
 import { Conversation, Message, Attachment } from '@/types';
 import { useAuth } from '@/lib/auth/auth-context';
 import { ChatService } from '@/services/chat-service';
+import { Avatar } from '@/components/ui/avatar';
 import { MessageItem } from './message-item';
 import { MessageInput } from './message-input';
+import { notificationService } from '@/lib/notifications/notification-service';
 
 interface ChatWindowProps {
   conversation: Conversation | null;
@@ -27,14 +29,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
       scrollToBottom();
     });
 
-    // Realtime subscription for incoming messages
+    // Realtime subscription for incoming messages with audio and desktop push alerts
     const unsubscribe = ChatService.subscribeToMessages(conversation.id, newMsg => {
       setMessages(prev => [...prev, newMsg]);
       scrollToBottom();
+      if (user && newMsg.sender_id !== user.id) {
+        void notificationService.notifyNewMessage(
+          newMsg.sender_name || 'Коллега',
+          newMsg.content,
+          conversation.name
+        );
+      }
     });
 
     return () => unsubscribe();
-  }, [conversation]);
+  }, [conversation, user]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -90,7 +99,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
         </div>
         <h2 className="text-lg font-bold text-white mb-1 tracking-tight">Выберите диалог</h2>
         <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-          Выберите канал, проектную группу или сотрудника из левой панели для начала рабочего общения.
+          Выберите рабочую группу или коллегу из левой панели для начала общения.
         </p>
       </div>
     );
@@ -107,12 +116,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
       <div className="px-6 py-3.5 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 flex items-center justify-between z-10">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-850 border border-slate-700/60 flex items-center justify-center text-blue-400 shadow-sm shrink-0">
-            {conversation.type === 'CHANNEL' ? (
-              <Hash className="w-5 h-5" />
-            ) : conversation.type === 'GROUP' ? (
-              <Users className="w-5 h-5 text-indigo-400" />
+            {conversation.type === 'DIRECT' ? (
+              <div className="relative">
+                <Avatar name={conversation.name || 'Сотрудник'} size="sm" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-900 absolute -bottom-0.5 -right-0.5" />
+              </div>
             ) : (
-              <Hash className="w-5 h-5 text-emerald-400" />
+              <Users className="w-5 h-5 text-blue-400" />
             )}
           </div>
           <div className="truncate">
@@ -121,7 +131,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
               {conversation.is_private && (
                 <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md">
                   <Lock className="w-3 h-3" />
-                  Приватный
+                  Приватная группа
                 </span>
               )}
             </div>
@@ -131,8 +141,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
           </div>
         </div>
 
-        {/* Top Header Actions (Search, Audio, Video) */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Top Header Actions (Notification Bell, Search, Audio, Video) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={async () => {
+              notificationService.playChime();
+              await notificationService.requestPermission();
+            }}
+            className="p-2 text-slate-400 hover:text-blue-400 rounded-xl hover:bg-slate-800 transition-colors"
+            title="Проверить звуковой сигнал и разрешить push-уведомления"
+          >
+            <Bell className="w-4 h-4" />
+          </button>
+
           {showSearchInput ? (
             <div className="relative animate-in fade-in">
               <input
@@ -169,7 +191,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
 
           <button
             type="button"
-            onClick={() => alert('Аудиосвязь WebRTC подключена к каналу.')}
+            onClick={() => alert('Аудиосвязь WebRTC подключена к группе.')}
             className="p-2 text-slate-400 hover:text-emerald-400 rounded-xl hover:bg-slate-800 transition-colors"
             title="Голосовой звонок"
           >

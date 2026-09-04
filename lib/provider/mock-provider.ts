@@ -93,9 +93,9 @@ const INITIAL_USERS: User[] = [
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c1',
-    type: 'CHANNEL',
-    name: '📢 Новости и события',
-    description: 'Главный новостной канал компании Centras',
+    type: 'GROUP',
+    name: 'Корпоративные события',
+    description: 'Официальные анонсы, мероприятия и ключевые новости компании',
     created_by: 'u1',
     is_private: false,
     created_at: new Date().toISOString(),
@@ -103,9 +103,9 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   },
   {
     id: 'c2',
-    type: 'CHANNEL',
-    name: '💻 IT & Архитектура',
-    description: 'Обсуждение IT инфраструктуры, серверов и релизов',
+    type: 'GROUP',
+    name: 'Команда: IT & Архитектура',
+    description: 'Инфраструктура, релизы, базы данных и серверная безопасность',
     created_by: 'u1',
     is_private: false,
     created_at: new Date().toISOString(),
@@ -113,8 +113,8 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   },
   {
     id: 'c3',
-    type: 'CHANNEL',
-    name: '🤖 AI Лаборатория',
+    type: 'GROUP',
+    name: 'AI Лаборатория & R&D',
     description: 'Разработка и внедрение моделей искусственного интеллекта',
     created_by: 'u2',
     is_private: false,
@@ -124,7 +124,7 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c4',
     type: 'GROUP',
-    name: '👥 Проект: Десктоп-клиент',
+    name: 'Проект: Десктоп-клиент',
     description: 'Рабочая группа разработки защищённого Windows приложения',
     created_by: 'u2',
     is_private: true,
@@ -134,8 +134,8 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c6',
     type: 'GROUP',
-    name: '👥 Проект: Безопасность и RLS',
-    description: 'Рабочая группа по криптозащите и аудиту прав доступа',
+    name: 'Проект: Безопасность и RLS',
+    description: 'Рабочая группа по аппаратной защите DPAPI и аудиту',
     created_by: 'u1',
     is_private: true,
     created_at: new Date().toISOString(),
@@ -144,6 +144,15 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'c5',
     type: 'DIRECT',
+    name: 'Иван Петров (Senior AI Engineer)',
+    created_by: 'u1',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'c7',
+    type: 'DIRECT',
+    name: 'Анна Иванова (HR Lead)',
     created_by: 'u1',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -196,6 +205,17 @@ const INITIAL_MESSAGES: Message[] = [
         created_at: new Date().toISOString(),
       },
     ],
+  },
+  {
+    id: 'm4',
+    conversation_id: 'c7',
+    sender_id: 'u3',
+    sender_name: 'Анна Иванова',
+    sender_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna',
+    content: 'Добрый день! График отпусков департамента на следующий квартал утверждён.',
+    message_type: 'TEXT',
+    created_at: new Date(Date.now() - 900000).toISOString(),
+    reactions: [],
   },
 ];
 

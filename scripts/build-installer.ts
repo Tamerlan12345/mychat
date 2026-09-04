@@ -295,18 +295,19 @@ function verifyArtifact(isDir: boolean): void {
     process.exit(1);
   }
 
-  const installer = exeFiles[0];
-  const fileBuffer = fs.readFileSync(installer.fullPath);
-  const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-  const sizeMb = (installer.stat.size / (1024 * 1024)).toFixed(2);
-
   console.log(`\n${colors.bold}${colors.green}======================================================================${colors.reset}`);
-  console.log(`${colors.bold}${colors.green}       CENTRAS CHAT DESKTOP INSTALLER GENERATED SUCCESSFULLY         ${colors.reset}`);
+  console.log(`${colors.bold}${colors.green}       CENTRAS CHAT DESKTOP ARTIFACTS GENERATED SUCCESSFULLY          ${colors.reset}`);
   console.log(`${colors.bold}${colors.green}======================================================================${colors.reset}`);
-  console.log(`  ${colors.bold}Artifact:${colors.reset}    ${colors.cyan}${installer.fullPath}${colors.reset}`);
-  console.log(`  ${colors.bold}File Name:${colors.reset}   ${colors.white}${installer.name}${colors.reset}`);
-  console.log(`  ${colors.bold}File Size:${colors.reset}   ${colors.yellow}${sizeMb} MB (${installer.stat.size.toLocaleString()} bytes)${colors.reset}`);
-  console.log(`  ${colors.bold}SHA-256:${colors.reset}     ${colors.magenta}${hash}${colors.reset}`);
+  for (const installer of exeFiles) {
+    const fileBuffer = fs.readFileSync(installer.fullPath);
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    const sizeMb = (installer.stat.size / (1024 * 1024)).toFixed(2);
+    console.log(`  ${colors.bold}Artifact Type:${colors.reset} ${installer.name.includes('Setup') ? 'NSIS Setup Wizard' : 'Portable Standalone (.exe)'}`);
+    console.log(`  ${colors.bold}File Name:${colors.reset}     ${colors.white}${installer.name}${colors.reset}`);
+    console.log(`  ${colors.bold}File Size:${colors.reset}     ${colors.yellow}${sizeMb} MB (${installer.stat.size.toLocaleString()} bytes)${colors.reset}`);
+    console.log(`  ${colors.bold}SHA-256:${colors.reset}       ${colors.magenta}${hash}${colors.reset}`);
+    console.log(`  ----------------------------------------------------------------------`);
+  }
   console.log(`${colors.bold}${colors.green}======================================================================${colors.reset}\n`);
 }
 

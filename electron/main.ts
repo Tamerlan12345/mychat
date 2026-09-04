@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell, Menu, Tray, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage, shell, Menu, Tray, nativeImage, Notification } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -412,6 +412,54 @@ function registerIpcHandlers(): void {
       return { ok: false, error: err.message || 'Connection failed' };
     }
   });
+
+  ipcMain.handle('desktop:window-minimize', () => {
+    if (mainWindow) {
+      mainWindow.minimize();
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('desktop:window-maximize', () => {
+    if (mainWindow) {
+      if (mainWindow.isMaximized()) {
+        mainWindow.unmaximize();
+      } else {
+        mainWindow.maximize();
+      }
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('desktop:window-close', () => {
+    if (mainWindow) {
+      mainWindow.close();
+      return true;
+    }
+    return false;
+  });
+
+  ipcMain.handle('desktop:window-is-maximized', () => {
+    return mainWindow ? mainWindow.isMaximized() : false;
+  });
+
+  ipcMain.handle('desktop:show-notification', (_event, ...args: any[]) => {
+    const opts = (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) ? args[0] : {};
+    if (!opts.title || typeof opts.title !== 'string') return false;
+    try {
+      const notif = new Notification({
+        title: opts.title,
+        body: typeof opts.body === 'string' ? opts.body : '',
+        silent: Boolean(opts.silent),
+      });
+      notif.show();
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -466,6 +514,8 @@ async function createWindow(): Promise<void> {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    frame: false,
+    backgroundColor: '#020617',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

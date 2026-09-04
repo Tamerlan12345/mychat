@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Download, Smile, Edit2, Trash2, Reply } from 'lucide-react';
+import { FileText, Download, Smile, Edit2, Trash2, Reply, CheckCheck } from 'lucide-react';
 import { Message, User } from '@/types';
 import { Avatar } from '@/components/ui/avatar';
 import { FileService } from '@/services/file-service';
@@ -71,7 +71,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           <span className="font-semibold text-xs text-slate-200 tracking-tight">
             {message.sender_name || 'Сотрудник'}
           </span>
-          <span className="text-[10px] text-slate-400">{formatTime(message.created_at)}</span>
+          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+            {formatTime(message.created_at)}
+            {isOwner && <CheckCheck className="w-3 h-3 text-blue-400 inline" />}
+          </span>
           {message.edited_at && <span className="text-[10px] text-slate-400 italic">(изменено)</span>}
         </div>
 

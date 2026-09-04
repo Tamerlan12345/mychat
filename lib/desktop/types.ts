@@ -22,6 +22,11 @@ export interface DesktopBridge {
   pingServer: (url: string) => Promise<PingServerResult>;
   setNotificationBadge?: (count: number) => Promise<void | boolean>;
   setBadgeCount?: (count: number) => Promise<boolean>;
+  minimizeWindow?: () => Promise<boolean>;
+  maximizeWindow?: () => Promise<boolean>;
+  closeWindow?: () => Promise<boolean>;
+  isWindowMaximized?: () => Promise<boolean>;
+  showNotification?: (options: { title: string; body: string; silent?: boolean }) => Promise<boolean>;
 }
 
 export interface ISecureStorage {
