@@ -184,3 +184,5 @@ export interface TelegramNotificationOutbox {
   created_at: string;
   updated_at: string;
 }
+
+export * from '@/lib/desktop/types';
