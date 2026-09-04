@@ -83,14 +83,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
 
   if (!conversation) {
     return (
-      <div className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-4">
-          <Hash className="w-8 h-8" />
+      <div className="flex-1 bg-[#f6f7f9] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400 mb-4">
+          <Hash className="w-5 h-5" />
         </div>
-        <h2 className="text-lg font-semibold text-slate-200 mb-1">Выберите диалог для общения</h2>
-        <p className="text-xs text-slate-500 max-w-sm">
-          Используйте левую панель, чтобы открыть личный чат, рабочую группу или корпоративный канал.
-        </p>
+        <h2 className="text-base font-semibold text-slate-800 mb-1">Выберите диалог</h2>
+        <p className="text-xs text-slate-500 max-w-sm">Откройте чат из списка слева.</p>
       </div>
     );
   }
@@ -101,11 +99,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
   });
 
   return (
-    <div className="flex-1 bg-slate-950 flex flex-col h-full overflow-hidden">
+    <div className="flex-1 bg-[#f6f7f9] flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-3.5 bg-slate-900/80 border-b border-slate-800 flex items-center justify-between">
+      <div className="px-6 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-brand-accent">
+          <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-blue-600">
             {conversation.type === 'CHANNEL' ? (
               <Hash className="w-5 h-5" />
             ) : conversation.type === 'GROUP' ? (
@@ -116,11 +114,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white">{conversation.name || 'Диалог'}</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{conversation.name || 'Диалог'}</h2>
               {conversation.is_private && <Lock className="w-3.5 h-3.5 text-slate-500" />}
             </div>
             {conversation.description && (
-              <p className="text-[11px] text-slate-400">{conversation.description}</p>
+              <p className="text-[11px] text-slate-500">{conversation.description}</p>
             )}
           </div>
         </div>
@@ -134,7 +132,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
                 value={searchInChat}
                 onChange={e => setSearchInChat(e.target.value)}
                 placeholder="Поиск в этом чате..."
-                className="bg-slate-950 border border-slate-700 text-xs text-white rounded-lg px-3 py-1.5 focus:outline-none"
+                 className="bg-white border border-slate-200 text-xs text-slate-800 rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 autoFocus
               />
               <button
@@ -142,7 +140,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
                   setShowSearchInput(false);
                   setSearchInChat('');
                 }}
-                className="absolute right-2 top-2 text-slate-500 hover:text-white"
+                 className="absolute right-2 top-2 text-slate-400 hover:text-slate-900"
               >
                 ✕
               </button>
@@ -150,7 +148,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
           ) : (
             <button
               onClick={() => setShowSearchInput(true)}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+               className="p-2 text-slate-400 hover:text-slate-900 rounded-md hover:bg-slate-50 transition-colors"
               title="Поиск сообщений"
             >
               <Search className="w-4 h-4" />
@@ -160,10 +158,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
       </div>
 
       {/* Messages List Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-1">
         {filteredMessages.length === 0 ? (
-          <div className="text-center py-12 text-slate-500 text-xs">
-            {searchInChat ? 'Сообщения не найдены' : 'Сообщений пока нет. Напишите первое сообщение!'}
+            <div className="text-center py-12 text-slate-500 text-xs">
+             {searchInChat ? 'Ничего не найдено' : 'Сообщений пока нет'}
           </div>
         ) : (
           filteredMessages.map(msg => (

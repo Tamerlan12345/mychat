@@ -4,8 +4,8 @@ import { AuthProvider } from '@/lib/auth/auth-context';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 
 export const metadata = {
-  title: 'Centras Chat — Corporate Messenger',
-  description: 'Self-hosted / White-label corporate messenger with Telegram integration',
+  title: 'Centras Chat',
+  description: 'Корпоративный чат для рабочих разговоров',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

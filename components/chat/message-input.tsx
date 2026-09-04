@@ -62,13 +62,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className="border-t border-slate-800 bg-slate-900/90 p-3 space-y-2">
+    <div className="border-t border-slate-200 bg-white p-3 space-y-2">
       {/* Replying Preview Header */}
       {replyingTo && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950 border-l-2 border-brand-primary rounded-r-lg text-xs">
+         <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 border-l-2 border-blue-600 rounded-r-md text-xs">
           <div className="truncate">
-            <span className="font-semibold text-brand-accent">Ответ для {replyingTo.sender_name}: </span>
-            <span className="text-slate-400 truncate">{replyingTo.content}</span>
+             <span className="font-semibold text-blue-700">Ответ для {replyingTo.sender_name}: </span>
+             <span className="text-slate-500 truncate">{replyingTo.content}</span>
           </div>
           {onCancelReply && (
             <button onClick={onCancelReply} className="text-slate-500 hover:text-white ml-2">
@@ -82,11 +82,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       {pendingAttachments.length > 0 && (
         <div className="flex flex-wrap gap-2 px-1">
           {pendingAttachments.map((att, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-300"
+             <div
+               key={idx}
+               className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2.5 py-1 text-xs text-slate-600"
             >
-              <FileText className="w-3.5 h-3.5 text-brand-accent" />
+               <FileText className="w-3.5 h-3.5 text-blue-600" />
               <span className="truncate max-w-[150px] font-medium">{att.file_name}</span>
               <span className="text-[10px] text-slate-500">({FileService.formatFileSize(att.size || 0)})</span>
               <button
@@ -102,7 +102,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       {/* Validation Error Banner */}
       {errorMsg && (
-        <div className="flex items-center gap-2 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-lg">
+         <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-md">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMsg}</span>
         </div>
@@ -121,7 +121,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+           className="p-2.5 text-slate-400 hover:text-slate-900 rounded-md hover:bg-slate-50 transition-colors"
           title="Прикрепить файл (до 50 МБ)"
         >
           <Paperclip className="w-5 h-5" />
@@ -133,13 +133,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onChange={e => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Написать сообщение..."
-          className="flex-1 bg-slate-950 border border-slate-800 focus:border-brand-primary text-slate-100 rounded-xl px-4 py-2.5 text-xs placeholder-slate-500 focus:outline-none transition-colors"
+           className="flex-1 bg-white border border-slate-200 focus:border-blue-500 text-slate-900 rounded-md px-4 py-2.5 text-xs placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-100 transition-colors"
         />
 
         <button
           type="submit"
           disabled={!content.trim() && pendingAttachments.length === 0}
-          className="p-2.5 bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl shadow-lg shadow-blue-500/10 transition-colors"
+           className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md transition-colors"
           title="Отправить сообщение"
         >
           <Send className="w-4 h-4" />
