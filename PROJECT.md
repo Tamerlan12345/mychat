@@ -21,6 +21,8 @@
 | File Service | `services/file-service.ts` | File validation (max 50MB) and upload/download | Data Provider | Chat UI |
 | Auth Context | `lib/auth/auth-context.tsx` | Authentication, RBAC checks & session state | User Service | Next Pages |
 | Theme Provider | `components/ui/theme-provider.tsx` | Dynamic CSS variable `:root` injector | Branding Service | Root Layout |
+| Electron Main Process | `electron/main.ts` | Desktop window lifecycle, single instance lock, DPAPI vault storage, ephemeral server | Electron, Node HTTP/FS | Next.js desktop client |
+| Electron Preload Bridge | `electron/preload.ts` | Context isolation bridge exposing typed `window.desktopBridge` with whitelisted IPC | Electron `contextBridge` | Web UI / Desktop adapters |
 
 ## Decisions Log
 | # | Date | Decision | Context | Alternatives rejected | Reversal cost |
@@ -30,6 +32,7 @@
 | 3 | 2026-08-10 | In-Memory & LocalStorage Fallback Provider | Ensures instant standalone demo execution without mandatory external Supabase project keys | Hard dependency on live cloud credentials | Low |
 | 4 | 2026-08-10 | Git Ignore Policy | Standardize ignored technical files (node_modules, .next, .superpowers, logs, env) | Committing build artifacts and secret keys | Low |
 | 5 | 2026-08-11 | Real Supabase Provider Selected at Runtime via `resolveProviderMode()` | Tech Spec §3 requires a production-grade backend (real Postgres Auth/RLS/Realtime) while keeping the zero-config mock demo path working out of the box | Always requiring live Supabase credentials; a build-time flag instead of a runtime env check | Medium |
+| 6 | 2026-09-04 | Hardened Electron Architecture with Windows DPAPI Vault | Desktop application requirements dictate strict isolation (`nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, `webSecurity: true`) and DPAPI hardware-backed encryption (`safeStorage`) for credentials | Custom native C++ addons (Node 24 compatibility issues), plaintext LocalStorage for tokens | Medium |
 
 ## Task Log
 | # | Task | Mode | Status | Files | Goals satisfied (G1–G4) | Notes |
@@ -42,6 +45,7 @@
 | 6 | Telegram Bot API relay | Feature | Completed | `lib/telegram/*`, `app/api/telegram/*`, `supabase/migrations/003_telegram_bot_relay.sql`, `components/telegram/*` | G1, G2, G4 | Bot API linking, direct-message notifications, private text inbound relay, and retryable outbox; live credentials still require manual setup |
 | 7 | Production Git Configuration | Refactor | Completed | `.gitignore` | G3, G4 | Exclusion of technical & temporary files |
 | 8 | Backend Foundation — real Supabase provider (Auth, Postgres, Realtime) | Feature | Completed | `lib/provider/{index,supabase-client,supabase-provider}.ts`, `lib/auth/{index,auth-provider,mock-auth-provider,supabase-auth-provider}.ts`, `supabase/migrations/002_auth_and_rls.sql`, `app/api/audit-ip/route.ts`, `scripts/seed-supabase.ts`, `docs/SUPABASE_SETUP.md` | G1, G2, G3, G4 | `resolveProviderMode()` picks `mock` (zero-config, unchanged demo behavior) or `supabase` (real password auth, RLS-backed Postgres, Realtime broadcast) from `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY`; `getDataProvider()`/`getAuthProvider()` factories wired into all 5 services + auth context; `SupabaseDataProvider` fully implements `IDataProvider` (35 members); RLS migration went through 2 fix rounds (privilege escalation, missing INSERT policy, member-bootstrap deadlock, audit-log RPC forgery — all closed). Mock provider files untouched (`mock-provider.ts`, `mock-auth-provider.ts` byte-identical since initial commit), so the zero-config demo path is unaffected. Full verification counts are recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`; real-Supabase manual pass not run — no project credentials in this session. |
+| 9 | Hardened Electron Main Process & Preload Bridge (Desktop Plan Task 2) | Feature | Completed | `electron/main.ts`, `electron/preload.ts`, `tests/electron-security.test.ts` | G1, G2, G3, G4 | Hardened security flags, single instance lock, navigation denial / external routing, safeStorage DPAPI vault handlers, typed preload bridge, 158/158 tests passing |
 
 ## Known Issues & Technical Debt
 | Issue | Severity | Location | Impact on G1 / G3 / G4 | Owner | Plan |
@@ -56,5 +60,6 @@
 - `npm run dev`: Launch local Next.js development server
 - `npm run build`: Production build compilation (Verified 2026-08-11: Next.js 14.2.35, all routes compiled clean incl. the `/api/audit-ip` route added in the Backend Foundation plan)
 - `npm run test`: Vitest suite (Task 6 verification count is recorded in `.superpowers/sdd/2026-08-11-telegram-bot-relay-plan/task-6-report.md`)
+- `npm run desktop:compile`: Compile Electron TypeScript main & preload files to `dist-electron/` (`tsc -p electron/tsconfig.json`)
 - `npm run lint`: not currently runnable non-interactively — see Known Issues (no ESLint config in repo)
 - `npm run seed:supabase`: seeds a real Supabase project per `docs/SUPABASE_SETUP.md` (requires `.env.local` with project credentials, not available in automated sessions)
