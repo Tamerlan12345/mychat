@@ -162,6 +162,25 @@ export function isAllowedLocalUrl(targetUrl: string): boolean {
   }
 }
 
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.rsc': 'text/x-component; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+};
+
 /**
  * Resolve local development or production server port with path-traversal defended file serving
  */
@@ -176,17 +195,77 @@ async function resolveServerUrl(): Promise<string> {
   }
 
   return new Promise((resolve, reject) => {
+    const appDir = path.resolve(__dirname, '..');
+    const publicDir = path.resolve(appDir, 'public');
+    const nextDir = path.resolve(appDir, '.next');
+    const staticDir = path.resolve(nextDir, 'static');
+    const serverAppDir = path.resolve(nextDir, 'server', 'app');
+
     localServer = http.createServer((req, res) => {
       const host = req.headers.host || '127.0.0.1';
       const reqUrl = new URL(req.url || '/', `http://${host}`);
-      const publicDir = path.resolve(__dirname, '..', 'public');
-      const safePath = path.normalize(reqUrl.pathname).replace(/^(\.\.[/\\])+/, '');
-      const filePath = path.resolve(publicDir, '.' + safePath);
+      const pathname = decodeURIComponent(reqUrl.pathname);
 
-      if (filePath.startsWith(publicDir) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        const stream = fs.createReadStream(filePath);
-        return stream.pipe(res);
+      // Audit IP API endpoint
+      if (pathname === '/api/audit-ip') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ip: '127.0.0.1' }));
+        return;
       }
+
+      // Next.js static assets (CSS, JS chunks, media)
+      if (pathname.startsWith('/_next/static/')) {
+        const subPath = pathname.replace(/^\/_next\/static\//, '');
+        const safeSubPath = path.normalize(subPath).replace(/^(\.\.[/\\])+/, '');
+        const staticFilePath = path.resolve(staticDir, '.' + safeSubPath);
+
+        if (staticFilePath.startsWith(staticDir) && fs.existsSync(staticFilePath) && fs.statSync(staticFilePath).isFile()) {
+          const ext = path.extname(staticFilePath).toLowerCase();
+          res.writeHead(200, {
+            'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          });
+          return fs.createReadStream(staticFilePath).pipe(res);
+        }
+      }
+
+      // Public directory assets
+      const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, '');
+      const publicFilePath = path.resolve(publicDir, '.' + safePath);
+      if (publicFilePath.startsWith(publicDir) && fs.existsSync(publicFilePath) && fs.statSync(publicFilePath).isFile()) {
+        const ext = path.extname(publicFilePath).toLowerCase();
+        res.writeHead(200, {
+          'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+        });
+        return fs.createReadStream(publicFilePath).pipe(res);
+      }
+
+      // Next.js RSC payload handling
+      const isRscRequest = reqUrl.searchParams.has('_rsc') || pathname.endsWith('.rsc');
+      if (isRscRequest) {
+        const cleanRoute = pathname.replace(/\.rsc$/, '').replace(/^\//, '').replace(/\/$/, '') || 'index';
+        const rscFilePath = path.resolve(serverAppDir, `${cleanRoute}.rsc`);
+        if (rscFilePath.startsWith(serverAppDir) && fs.existsSync(rscFilePath) && fs.statSync(rscFilePath).isFile()) {
+          res.writeHead(200, {
+            'Content-Type': 'text/x-component; charset=utf-8',
+          });
+          return fs.createReadStream(rscFilePath).pipe(res);
+        }
+      }
+
+      // Next.js App Router HTML pages
+      const route = pathname.replace(/^\//, '').replace(/\/$/, '') || 'index';
+      let htmlFilePath = path.resolve(serverAppDir, `${route}.html`);
+      if (!fs.existsSync(htmlFilePath) || !fs.statSync(htmlFilePath).isFile()) {
+        htmlFilePath = path.resolve(serverAppDir, 'index.html');
+      }
+
+      if (fs.existsSync(htmlFilePath) && fs.statSync(htmlFilePath).isFile()) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return fs.createReadStream(htmlFilePath).pipe(res);
+      }
+
+      // Fallback
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end('<!DOCTYPE html><html><head><title>Centras Chat</title></head><body><div id="__next">Centras Corporate Chat</div></body></html>');
     });
