@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserStatus } from '@/types';
 import { UserService } from '@/services/user-service';
 import { getAuthProvider } from '@/lib/auth';
+import { connectionManager } from '@/lib/desktop/connection-manager';
 
 interface AuthContextType {
   user: User | null;
@@ -32,23 +33,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const auth = getAuthProvider();
+    let unsubscribe: () => void = () => {};
 
-    auth
-      .getCurrentUserId()
-      .then(async userId => {
-        if (!userId) return;
-        const profile = await UserService.getUserById(userId);
-        if (profile && profile.status !== 'BLOCKED') {
-          setUser(profile);
+    const initAuth = async () => {
+      try {
+        await connectionManager.init();
+      } catch (err) {
+        console.error('Failed to initialize connection manager:', err);
+      }
+
+      const auth = getAuthProvider();
+
+      try {
+        const userId = await auth.getCurrentUserId();
+        if (userId) {
+          const profile = await UserService.getUserById(userId);
+          if (profile && profile.status !== 'BLOCKED') {
+            setUser(profile);
+          }
         }
-      })
-      .finally(() => setIsLoading(false));
+      } catch (err) {
+        console.error('Failed to resolve initial user session:', err);
+      } finally {
+        setIsLoading(false);
+      }
 
-    const unsubscribe = auth.onAuthStateChange(userId => {
-      if (!userId) setUser(null);
-    });
-    return () => unsubscribe();
+      unsubscribe = auth.onAuthStateChange(userId => {
+        if (!userId) setUser(null);
+      });
+    };
+
+    void initAuth();
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {

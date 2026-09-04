@@ -97,6 +97,11 @@ export const ServerConnectionDialog: React.FC<ServerConnectionDialogProps> = ({
       setIsCustom(true);
       setSaveSuccess(true);
       onSaved?.();
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Не удалось сохранить конфигурацию.');
     } finally {
@@ -118,6 +123,11 @@ export const ServerConnectionDialog: React.FC<ServerConnectionDialogProps> = ({
       setIsCustom(false);
       setSaveSuccess(true);
       onSaved?.();
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Не удалось сбросить конфигурацию.');
     } finally {

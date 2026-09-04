@@ -162,9 +162,6 @@ export class ConnectionManager {
 
     // 2. Browser / Node fetch health check with timeout
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
       const headers: Record<string, string> = {};
       const key = anonKey || (await this.getActiveConfig()).anonKey;
       if (key) {
@@ -172,24 +169,30 @@ export class ConnectionManager {
         headers['Authorization'] = `Bearer ${key}`;
       }
 
+      const headController = new AbortController();
+      const headTimeoutId = setTimeout(() => headController.abort(), 5000);
       try {
         const response = await fetch(url, {
           method: 'HEAD',
           headers,
-          signal: controller.signal,
+          signal: headController.signal,
         });
-        clearTimeout(timeoutId);
         return { ok: response.ok, status: response.status };
       } catch {
         const getController = new AbortController();
         const getTimeoutId = setTimeout(() => getController.abort(), 5000);
-        const response = await fetch(url, {
-          method: 'GET',
-          headers,
-          signal: getController.signal,
-        });
-        clearTimeout(getTimeoutId);
-        return { ok: response.ok, status: response.status };
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers,
+            signal: getController.signal,
+          });
+          return { ok: response.ok, status: response.status };
+        } finally {
+          clearTimeout(getTimeoutId);
+        }
+      } finally {
+        clearTimeout(headTimeoutId);
       }
     } catch (err: any) {
       return { ok: false, error: err.message || 'Connection failed' };
