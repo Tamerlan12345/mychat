@@ -1,0 +1,23 @@
+appId: com.centras.corporatechat
+productName: Centras Chat
+directories:
+  output: dist-installer
+  buildResources: build
+files:
+  - dist-electron/**/*
+  - .next/**/*
+  - public/**/*
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Centras Chat
+  uninstallDisplayName: Centras Corporate Chat
+asar: true

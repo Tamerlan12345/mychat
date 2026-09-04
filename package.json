@@ -2,13 +2,18 @@
   "name": "corporate-chat",
   "version": "1.0.0",
   "private": true,
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "seed:supabase": "tsx scripts/seed-supabase.ts"
+    "seed:supabase": "tsx scripts/seed-supabase.ts",
+    "desktop:compile": "tsc -p electron/tsconfig.json",
+    "desktop:dev": "concurrently -k \"next dev\" \"wait-on http://127.0.0.1:3000 && electron .\"",
+    "desktop:build": "next build && tsc -p electron/tsconfig.json",
+    "build:installer": "tsx scripts/build-installer.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -25,12 +30,17 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
+    "concurrently": "^9.2.4",
+    "cross-env": "^7.0.3",
     "dotenv": "^17.4.2",
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.8",
     "jsdom": "^29.1.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "tsx": "^4.23.12",
     "typescript": "^5.5.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wait-on": "^8.0.5"
   }
 }
