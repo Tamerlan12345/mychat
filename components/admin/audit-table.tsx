@@ -21,17 +21,17 @@ export const AuditTable: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-bold text-white">Журнал аудита действий (Audit Logs)</h2>
-          <p className="text-xs text-slate-400">
-            Полный хронологический отпечаток всех критических административных действий в системе (Tech Spec §31)
+          <h2 className="text-base font-bold text-slate-900">Журнал аудита</h2>
+          <p className="text-xs text-gray-500">
+            Хронология административных действий в системе
           </p>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
               <th className="p-3.5">Время</th>
               <th className="p-3.5">Пользователь</th>
               <th className="p-3.5">Действие</th>
@@ -40,11 +40,11 @@ export const AuditTable: React.FC = () => {
               <th className="p-3.5">Метаданные</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 text-xs font-mono">
+          <tbody className="divide-y divide-gray-100 text-xs font-mono">
             {logs.map(log => (
-              <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
-                <td className="p-3.5 text-slate-400 whitespace-nowrap">{formatDate(log.created_at)}</td>
-                <td className="p-3.5 text-slate-200">{log.user_email}</td>
+              <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                <td className="p-3.5 text-gray-500 whitespace-nowrap">{formatDate(log.created_at)}</td>
+                <td className="p-3.5 text-slate-900">{log.user_email}</td>
                 <td className="p-3.5">
                   <Badge
                     variant={
@@ -58,11 +58,11 @@ export const AuditTable: React.FC = () => {
                     {log.action}
                   </Badge>
                 </td>
-                <td className="p-3.5 text-slate-300">
+                <td className="p-3.5 text-gray-700">
                   {log.target_type} {log.target_id ? `(#${log.target_id.slice(0, 8)})` : ''}
                 </td>
-                <td className="p-3.5 text-slate-500">{log.ip}</td>
-                <td className="p-3.5 text-slate-400 max-w-xs truncate">
+                <td className="p-3.5 text-gray-400">{log.ip}</td>
+                <td className="p-3.5 text-gray-500 max-w-xs truncate">
                   {JSON.stringify(log.metadata)}
                 </td>
               </tr>

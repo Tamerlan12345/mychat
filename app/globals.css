@@ -3,26 +3,43 @@
 @tailwind utilities;
 
 :root {
-  --brand-primary: #3b82f6;
-  --brand-primary-hover: #2563eb;
-  --brand-secondary: #64748b;
-  --brand-bg: #020617;
-  --brand-surface: #0f172a;
+  /* Brand variables stay for BrandingService.applyBrandingToDOM compatibility */
+  --brand-primary: #2563eb;
+  --brand-primary-hover: #1d4ed8;
+  --brand-secondary: #6b7280;
+  --brand-bg: #f3f4f6;
+  --brand-surface: #ffffff;
   --brand-accent: #3b82f6;
+
+  /* Design tokens (see docs/design-centras-workspace-redesign.html → «Система стилей») */
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-3: #f1f3f6;
+  --line: #e6e8ec;
+  --line-soft: #eef0f3;
+  --text-1: #0f172a;
+  --text-2: #374151;
+  --text-3: #6b7280;
+  --text-4: #8b93a1;
+  --accent: #2563eb;
+  --accent-ink: #1d4ed8;
+  --accent-soft: #eff6ff;
+  --accent-line: #bfdbfe;
 }
 
 body {
-  background-color: #020617;
-  color: #f8fafc;
+  background-color: var(--bg);
+  color: var(--text-1);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
   height: 100vh;
 }
 
-/* Custom Sleek Dark Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -30,10 +47,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #d5d9e0;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #b8bec8;
 }

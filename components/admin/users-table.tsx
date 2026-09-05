@@ -121,13 +121,13 @@ export const UsersTable: React.FC = () => {
       {/* Table Header Controls */}
       <div className="flex flex-col sm:flex-row justify-between gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+          <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Поиск по имени или email..."
-            className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-brand-primary"
+            className="w-full bg-white border border-gray-200 text-slate-900 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:border-brand-primary"
           />
         </div>
         <Button variant="primary" onClick={handleOpenCreateModal} className="flex items-center gap-1.5">
@@ -137,10 +137,10 @@ export const UsersTable: React.FC = () => {
       </div>
 
       {/* Users Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-950/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
               <th className="p-3.5">Сотрудник</th>
               <th className="p-3.5">Отдел</th>
               <th className="p-3.5">Роль</th>
@@ -148,19 +148,19 @@ export const UsersTable: React.FC = () => {
               <th className="p-3.5 text-right">Действия</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800 text-xs">
+          <tbody className="divide-y divide-gray-100 text-xs">
             {filteredUsers.map(u => (
-              <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
+              <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                 <td className="p-3.5">
                   <div className="flex items-center gap-3">
                     <Avatar name={`${u.first_name} ${u.last_name}`} src={u.avatar_url} size="md" />
                     <div>
-                      <p className="font-semibold text-slate-100">{u.first_name} {u.last_name}</p>
-                      <p className="text-[11px] text-slate-400">{u.email}</p>
+                      <p className="font-semibold text-slate-900">{u.first_name} {u.last_name}</p>
+                      <p className="text-[11px] text-gray-500">{u.email}</p>
                     </div>
                   </div>
                 </td>
-                <td className="p-3.5 text-slate-300">{u.department_name || 'Не назначен'}</td>
+                <td className="p-3.5 text-gray-700">{u.department_name || 'Не назначен'}</td>
                 <td className="p-3.5">
                   <Badge variant={u.role === 'SUPER_ADMIN' ? 'danger' : u.role === 'ADMIN' ? 'warning' : 'neutral'}>
                     {u.role}
@@ -174,15 +174,15 @@ export const UsersTable: React.FC = () => {
                 <td className="p-3.5 text-right space-x-1">
                   <button
                     onClick={() => handleOpenEditModal(u)}
-                    className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                    className="p-1.5 text-gray-500 hover:text-slate-900 rounded hover:bg-gray-100"
                     title="Редактировать"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleToggleBlock(u)}
-                    className={`p-1.5 rounded hover:bg-slate-800 ${
-                      u.status === 'BLOCKED' ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'
+                    className={`p-1.5 rounded hover:bg-gray-100 ${
+                      u.status === 'BLOCKED' ? 'text-emerald-600 hover:text-emerald-700' : 'text-amber-600 hover:text-amber-700'
                     }`}
                     title={u.status === 'BLOCKED' ? 'Разблокировать' : 'Заблокировать'}
                   >
@@ -190,7 +190,7 @@ export const UsersTable: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleDelete(u.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800"
+                    className="p-1.5 text-gray-500 hover:text-rose-600 rounded hover:bg-gray-100"
                     title="Удалить"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -217,11 +217,11 @@ export const UsersTable: React.FC = () => {
           <Input label="Должность" value={position} onChange={e => setPosition(e.target.value)} />
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Отдел</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Отдел</label>
             <select
               value={deptId}
               onChange={e => setDeptId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
+              className="w-full bg-gray-50 border border-gray-300 text-slate-900 rounded-lg px-3 py-2 text-xs focus:outline-none"
             >
               {departments.map(d => (
                 <option key={d.id} value={d.id}>
@@ -232,11 +232,11 @@ export const UsersTable: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Роль в системе</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Роль в системе</label>
             <select
               value={role}
               onChange={e => setRole(e.target.value as UserRole)}
-              className="w-full bg-slate-950 border border-slate-700 text-slate-100 rounded-lg px-3 py-2 text-xs focus:outline-none"
+              className="w-full bg-gray-50 border border-gray-300 text-slate-900 rounded-lg px-3 py-2 text-xs focus:outline-none"
             >
               <option value="EMPLOYEE">EMPLOYEE (Пользователь)</option>
               <option value="MODERATOR">MODERATOR (Модератор)</option>
@@ -245,7 +245,7 @@ export const UsersTable: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+          <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Отмена</Button>
             <Button variant="primary" onClick={handleSave}>Сохранить</Button>
           </div>

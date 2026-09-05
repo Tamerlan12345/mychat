@@ -1,8 +1,9 @@
 appId: com.centras.corporatechat
 productName: Centras Chat
+copyright: Copyright © 2026 Centras
 directories:
   output: dist-installer
-  buildResources: build
+  buildResources: resources
 files:
   - dist-electron/**/*
   - .next/**/*
@@ -10,6 +11,8 @@ files:
   - public/**/*
   - package.json
 win:
+  icon: resources/icon.ico
+  artifactName: Centras-Chat-Setup-${version}.${ext}
   target:
     - target: nsis
       arch:
@@ -17,11 +20,21 @@ win:
     - target: portable
       arch:
         - x64
+portable:
+  artifactName: Centras-Chat-Portable-${version}.${ext}
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  runAfterFinish: true
   shortcutName: Centras Chat
-  uninstallDisplayName: Centras Corporate Chat
+  uninstallDisplayName: Centras Chat
+  installerLanguages:
+    - ru_RU
+    - en_US
+  displayLanguageSelector: false
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
 asar: true

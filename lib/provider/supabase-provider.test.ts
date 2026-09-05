@@ -138,3 +138,46 @@ describe('SupabaseDataProvider.updateBranding', () => {
     expect(result.company_name).toBe('New Co');
   });
 });
+
+describe('SupabaseDataProvider.getConversationMembers', () => {
+  beforeEach(() => from.mockReset());
+
+  it('loads members of one conversation with their joined profiles', async () => {
+    const order = vi.fn().mockResolvedValue({
+      data: [
+        {
+          conversation_id: 'c1', user_id: 'u2', role: 'MEMBER', joined_at: '2026-08-10T00:00:00Z', last_read_message_id: null,
+          profiles: {
+            id: 'u2', email: 'e@d.com', first_name: 'Иван', last_name: 'Петров', status: 'ONLINE', role: 'EMPLOYEE',
+            last_seen: '2026-08-10T00:00:00Z', created_at: '2026-08-10T00:00:00Z', updated_at: '2026-08-10T00:00:00Z',
+            departments: { name: 'AI' },
+          },
+        },
+      ],
+      error: null,
+    });
+    const eq = vi.fn().mockReturnValue({ order });
+    const select = vi.fn().mockReturnValue({ eq });
+    from.mockReturnValue({ select });
+
+    const provider = new SupabaseDataProvider();
+    const members = await provider.getConversationMembers('c1');
+
+    expect(from).toHaveBeenCalledWith('conversation_members');
+    expect(select.mock.calls[0][0]).toContain('profiles(*, departments(name))');
+    expect(eq).toHaveBeenCalledWith('conversation_id', 'c1');
+    expect(members).toHaveLength(1);
+    expect(members[0].role).toBe('MEMBER');
+    expect(members[0].user?.first_name).toBe('Иван');
+    expect(members[0].user?.department_name).toBe('AI');
+    expect(members[0].last_read_message_id).toBeUndefined();
+  });
+
+  it('throws a descriptive error when the query fails', async () => {
+    const order = vi.fn().mockResolvedValue({ data: null, error: { message: 'permission denied' } });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ order }) }) });
+
+    const provider = new SupabaseDataProvider();
+    await expect(provider.getConversationMembers('c1')).rejects.toThrow(/permission denied/);
+  });
+});

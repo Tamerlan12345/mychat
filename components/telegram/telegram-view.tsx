@@ -135,17 +135,17 @@ export const TelegramView: React.FC = () => {
   };
 
   if (authLoading) {
-    return <main className="flex-1 bg-slate-50 p-6 text-sm text-slate-500">Загрузка…</main>;
+    return <main className="flex-1 bg-gray-100 p-8 text-sm text-gray-500">Загрузка…</main>;
   }
 
   if (!user) {
-    return <main className="flex-1 bg-slate-50 p-6 text-sm text-slate-600">Войдите, чтобы настроить Telegram.</main>;
+    return <main className="flex-1 bg-gray-100 p-8 text-sm text-gray-600">Войдите, чтобы настроить Telegram.</main>;
   }
 
   const connected = identity?.status === 'active';
 
   return (
-    <main className="flex-1 min-w-0 overflow-y-auto bg-slate-50 p-4 sm:p-6">
+    <main className="flex-1 min-w-0 overflow-y-auto bg-gray-100 px-8 py-7">
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -153,7 +153,7 @@ export const TelegramView: React.FC = () => {
               <Send className="h-4 w-4" />
               Bot API
             </div>
-            <h1 className="text-xl font-semibold text-slate-900">Telegram relay</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Мост с Telegram</h1>
             <p className="mt-1 max-w-xl text-sm text-slate-500">
               Свяжите свой Telegram-чат с рабочими уведомлениями через бота.
             </p>

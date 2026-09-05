@@ -8,6 +8,43 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localServer: http.Server | null = null;
 let appOrigin = '';
+// Set when the user explicitly quits (tray menu / app.quit); a plain window close only hides to tray.
+let isQuitting = false;
+
+const APP_ICON_PATH = path.join(__dirname, '../public/icon.png');
+const WINDOW_STATE_FILE = 'window-state.json';
+
+interface WindowState {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+  isMaximized?: boolean;
+}
+
+const DEFAULT_WINDOW_STATE: WindowState = { width: 1280, height: 820 };
+
+function readWindowState(): WindowState {
+  try {
+    const file = path.join(app.getPath('userData'), WINDOW_STATE_FILE);
+    if (!fs.existsSync(file)) return DEFAULT_WINDOW_STATE;
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    if (typeof parsed?.width !== 'number' || typeof parsed?.height !== 'number') return DEFAULT_WINDOW_STATE;
+    return { ...DEFAULT_WINDOW_STATE, ...parsed };
+  } catch {
+    return DEFAULT_WINDOW_STATE;
+  }
+}
+
+function saveWindowState(win: BrowserWindow): void {
+  try {
+    const bounds = win.isMaximized() ? (win as any).__lastNormalBounds || win.getNormalBounds() : win.getBounds();
+    const state: WindowState = { ...bounds, isMaximized: win.isMaximized() };
+    fs.writeFileSync(path.join(app.getPath('userData'), WINDOW_STATE_FILE), JSON.stringify(state), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to persist window state:', err);
+  }
+}
 
 /**
  * Validate vault key against prototype pollution and invalid input
@@ -178,6 +215,7 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.rsc': 'text/x-component; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
 };
 
@@ -216,8 +254,9 @@ async function resolveServerUrl(): Promise<string> {
       // Next.js static assets (CSS, JS chunks, media)
       if (pathname.startsWith('/_next/static/')) {
         const subPath = pathname.replace(/^\/_next\/static\//, '');
-        const safeSubPath = path.normalize(subPath).replace(/^(\.\.[/\\])+/, '');
-        const staticFilePath = path.resolve(staticDir, '.' + safeSubPath);
+        // Strip leading separators and parent references so the join can never escape staticDir.
+        const safeSubPath = path.normalize(subPath).replace(/^([/\\]|\.\.[/\\]?)+/, '');
+        const staticFilePath = path.resolve(staticDir, safeSubPath);
 
         if (staticFilePath.startsWith(staticDir) && fs.existsSync(staticFilePath) && fs.statSync(staticFilePath).isFile()) {
           const ext = path.extname(staticFilePath).toLowerCase();
@@ -453,6 +492,14 @@ function registerIpcHandlers(): void {
         title: opts.title,
         body: typeof opts.body === 'string' ? opts.body : '',
         silent: Boolean(opts.silent),
+        icon: fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : undefined,
+      });
+      notif.on('click', () => {
+        if (mainWindow) {
+          if (mainWindow.isMinimized()) mainWindow.restore();
+          mainWindow.show();
+          mainWindow.focus();
+        }
       });
       notif.show();
       return true;
@@ -465,39 +512,34 @@ function registerIpcHandlers(): void {
 /**
  * Initialize Tray
  */
+function showMainWindow(): void {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function createTray(): void {
-  const iconPath = path.join(__dirname, '../public/favicon.ico');
+  const iconPath = fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : path.join(__dirname, '../public/favicon.ico');
   if (fs.existsSync(iconPath)) {
     try {
-      const icon = nativeImage.createFromPath(iconPath);
+      const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
       tray = new Tray(icon);
       const contextMenu = Menu.buildFromTemplate([
-        {
-          label: 'Показать Centras Chat',
-          click: () => {
-            if (mainWindow) {
-              if (mainWindow.isMinimized()) mainWindow.restore();
-              mainWindow.show();
-              mainWindow.focus();
-            }
-          },
-        },
+        { label: 'Открыть Centras Chat', click: showMainWindow },
         { type: 'separator' },
         {
-          label: 'Выход',
+          label: 'Выйти из приложения',
           click: () => {
+            isQuitting = true;
             app.quit();
           },
         },
       ]);
-      tray.setToolTip('Centras Corporate Chat');
+      tray.setToolTip('Centras Chat');
       tray.setContextMenu(contextMenu);
-      tray.on('double-click', () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      });
+      tray.on('click', showMainWindow);
+      tray.on('double-click', showMainWindow);
     } catch (e) {
       console.warn('Tray initialization failed:', e);
     }
@@ -508,14 +550,20 @@ function createTray(): void {
  * Create hardened main browser window
  */
 async function createWindow(): Promise<void> {
+  const state = readWindowState();
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
+    width: state.width,
+    height: state.height,
+    x: state.x,
+    y: state.y,
+    minWidth: 1024,
+    minHeight: 680,
     show: false,
     frame: false,
-    backgroundColor: '#020617',
+    // Matches the web app's page background so there is no dark flash before first paint.
+    backgroundColor: '#f3f4f6',
+    title: 'Centras Chat',
+    icon: fs.existsSync(APP_ICON_PATH) ? APP_ICON_PATH : undefined,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -558,7 +606,20 @@ async function createWindow(): Promise<void> {
   await mainWindow.loadURL(startUrl);
 
   mainWindow.once('ready-to-show', () => {
+    if (state.isMaximized) mainWindow?.maximize();
     mainWindow?.show();
+  });
+
+  mainWindow.on('resize', () => mainWindow && saveWindowState(mainWindow));
+  mainWindow.on('move', () => mainWindow && saveWindowState(mainWindow));
+
+  // Messenger convention: closing the window keeps the app (and its notifications) alive in the tray.
+  mainWindow.on('close', event => {
+    if (mainWindow) saveWindowState(mainWindow);
+    if (!isQuitting && tray) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -573,26 +634,31 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 
   registerIpcHandlers();
 
+  // Windows groups taskbar buttons and notifications by this id; it must match the installer appId.
+  app.setAppUserModelId('com.centras.corporatechat');
+
   app.whenReady().then(async () => {
+    // Frameless window draws its own titlebar; no native menu bar anywhere.
+    Menu.setApplicationMenu(null);
     await createWindow();
     createTray();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
+      } else {
+        showMainWindow();
       }
     });
+  });
+
+  app.on('before-quit', () => {
+    isQuitting = true;
   });
 
   app.on('window-all-closed', () => {

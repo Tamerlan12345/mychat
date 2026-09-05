@@ -1,5 +1,5 @@
 import { getDataProvider } from '@/lib/provider';
-import { Conversation, Message, MessageReaction, Attachment } from '@/types';
+import { Conversation, Message, MessageReaction, Attachment, ConversationMember } from '@/types';
 
 export class ChatService {
   static async getConversations(userId: string): Promise<Conversation[]> {
@@ -39,6 +39,10 @@ export class ChatService {
 
   static async removeReaction(messageId: string, userId: string, reaction: string): Promise<boolean> {
     return getDataProvider().removeReaction(messageId, userId, reaction);
+  }
+
+  static async getConversationMembers(conversationId: string): Promise<ConversationMember[]> {
+    return getDataProvider().getConversationMembers(conversationId);
   }
 
   static async markAsRead(conversationId: string, userId: string, messageId: string): Promise<boolean> {

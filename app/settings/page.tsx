@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Bell, CheckCircle2, RefreshCw, Save, XCircle } from 'lucide-react';
-import { Sidebar } from '@/components/sidebar/sidebar';
+import { NavRail } from '@/components/sidebar/nav-rail';
 import { useAuth } from '@/lib/auth/auth-context';
 import { TelegramService } from '@/services/telegram-service';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [isServerDialogOpen, setIsServerDialogOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -69,13 +68,13 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
-      <Sidebar onSelectConversation={() => {}} onOpenCreateModal={() => {}} />
+    <div className="flex h-full w-full overflow-hidden bg-gray-100">
+      <NavRail />
 
-      <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6">
+      <main className="flex-1 min-w-0 overflow-y-auto px-8 py-7">
         <div className="mx-auto max-w-3xl space-y-6">
-          <header className="border-b border-slate-200 pb-5">
-            <h1 className="text-xl font-semibold text-slate-900">Настройки уведомлений</h1>
+          <header className="border-b border-gray-200 pb-5">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Настройки уведомлений</h1>
             <p className="mt-1 text-sm text-slate-500">Настройки сохраняются для вашего аккаунта.</p>
           </header>
 

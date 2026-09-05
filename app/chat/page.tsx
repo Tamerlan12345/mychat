@@ -14,6 +14,7 @@ export default function ChatPage() {
   const router = useRouter();
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [modalType, setModalType] = useState<'GROUP' | 'CHANNEL' | null>(null);
+  const [listVersion, setListVersion] = useState(0);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -33,21 +34,22 @@ export default function ChatPage() {
 
   if (isLoading || !user) {
     return (
-      <div className="h-screen w-screen bg-slate-950 flex items-center justify-center text-xs text-slate-400">
+      <div className="h-full w-full bg-gray-100 flex items-center justify-center text-xs text-gray-500">
         Загрузка приложения...
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-950 overflow-hidden">
+    <div className="flex h-full w-full bg-gray-100 overflow-hidden">
       <Sidebar
         activeConversationId={activeConversation?.id}
         onSelectConversation={conv => setActiveConversation(conv)}
         onOpenCreateModal={type => setModalType(type)}
+        refreshKey={listVersion}
       />
 
-      <ChatWindow conversation={activeConversation} />
+      <ChatWindow conversation={activeConversation} onConversationRead={() => setListVersion(v => v + 1)} />
 
       <ChannelModal
         isOpen={modalType !== null}
@@ -57,6 +59,7 @@ export default function ChatPage() {
         onCreated={() => {
           ChatService.getConversations(user.id).then(cList => {
             if (cList.length > 0) setActiveConversation(cList[cList.length - 1]);
+            setListVersion(v => v + 1);
           });
         }}
       />

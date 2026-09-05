@@ -174,3 +174,13 @@ If stale build caches cause packaging discrepancies, run:
 Remove-Item -Recurse -Force dist-installer, dist-electron, .next
 npm run build:installer
 ```
+
+## 8. Web ↔ Desktop Parity
+
+The desktop client renders the same Next.js build the web version serves, so the two look identical by construction. The pieces that live only in the shell are kept in sync as follows:
+
+- **Icon set** — `npm run icons` regenerates `public/favicon.ico`, `public/icon*.png` (web favicon, PWA manifest, tray, native notifications) and `resources/icon.ico` (installer, uninstaller, `.exe`) from one vector description in `scripts/generate-icons.mjs`. Commit the generated files; `electron-builder.yml` reads `resources/`.
+- **Window chrome** — the frameless window paints `#f3f4f6` (the app's page background) before first render, starts at 1280×820 (min 1024×680) and remembers its last size/position in `%APPDATA%/corporate-chat/window-state.json (the userData folder is named after package.json `name`)`. The custom titlebar shows the same brand and «Защищённое соединение» badge on both platforms; window controls appear only under Electron.
+- **Tray behaviour** — closing the window hides the app to the tray so notifications keep arriving; «Выйти из приложения» in the tray menu (or `before-quit`) really exits. Clicking a native notification or the tray icon brings the window back.
+- **Installer** — NSIS wizard in Russian (English fallback), per-user install, desktop + Start-menu shortcuts named «Centras Chat», artifacts `Centras-Chat-Setup-<version>.exe` and `Centras-Chat-Portable-<version>.exe`.
+- **Web install** — `public/manifest.webmanifest` lets browsers offer “Install Centras Chat” with the same icon and theme colour, giving a windowed experience close to the desktop build without the installer.

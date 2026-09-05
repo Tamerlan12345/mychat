@@ -9,8 +9,8 @@ export default function AdminUsersPage() {
     <AdminLayout>
       <div className="space-y-4">
         <div>
-          <h2 className="text-base font-bold text-white">Управление пользователями (Tech Spec §18)</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="text-base font-bold text-slate-900">Пользователи</h2>
+          <p className="text-xs text-gray-500">
             Создание сотрудников, редактирование профилей, назначение ролей и блокировка доступа
           </p>
         </div>

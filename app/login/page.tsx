@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Lock, Mail, ArrowRight, AlertCircle, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, ShieldCheck, CheckCircle2, MessageSquare, Users, Send } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
-import { Button } from '@/components/ui/button';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('admin@demo.local');
@@ -42,7 +41,7 @@ export default function LoginPage() {
       name: 'Администратор',
       role: 'Системный администратор / CTO',
       badge: 'Admin',
-      badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+      badgeColor: 'text-amber-700 bg-amber-50',
       avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Admin',
     },
     {
@@ -50,7 +49,7 @@ export default function LoginPage() {
       name: 'Иван Петров',
       role: 'Senior AI Engineer',
       badge: 'AI Lab',
-      badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+      badgeColor: 'text-blue-700 bg-blue-50',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ivan',
     },
     {
@@ -58,138 +57,154 @@ export default function LoginPage() {
       name: 'Анна Иванова',
       role: 'HR Lead & Communications',
       badge: 'HR',
-      badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      badgeColor: 'text-emerald-700 bg-emerald-50',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna',
     },
   ];
 
+  const inputClass =
+    'w-full h-11 bg-white border border-gray-200 text-slate-900 text-sm rounded-[10px] pl-10 pr-3.5 placeholder-gray-400 focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-100 transition-colors';
+
   return (
-    <div className="min-h-screen w-full bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden select-none">
-      {/* Dynamic Ambient Background Glows */}
-      <div className="absolute w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] -top-40 -left-40 pointer-events-none" />
-      <div className="absolute w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] -bottom-40 -right-40 pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b0a_1px,transparent_1px),linear-gradient(to_bottom,#1e293b0a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
-
-      <div className="w-full max-w-[440px] bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 shadow-2xl shadow-black/60 z-10 space-y-6">
-        {/* Branding Header */}
-        <div className="text-center space-y-3">
-          <div className="relative inline-block">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white mx-auto shadow-lg shadow-blue-500/25 border border-blue-400/30">
-              <Sparkles className="w-7 h-7" />
-            </div>
-            <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-slate-900"></span>
-            </span>
+    <div className="h-full w-full flex bg-gray-100 overflow-hidden">
+      {/* Brand panel */}
+      <aside className="hidden lg:flex w-[46%] max-w-[640px] flex-col justify-between p-12 text-white bg-[radial-gradient(900px_600px_at_-10%_-10%,rgba(147,197,253,0.35),transparent),linear-gradient(160deg,#1d4ed8,#1e3a8a)] select-none">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/15 border border-white/20 text-white font-extrabold text-lg flex items-center justify-center backdrop-blur">
+            C
           </div>
+          <span className="text-[15px] font-semibold tracking-tight">Centras Chat</span>
+        </div>
+
+        <div className="space-y-8">
+          <h1 className="text-[40px] leading-[1.1] font-bold tracking-tight max-w-md">
+            Рабочие разговоры компании — в одном защищённом месте
+          </h1>
+          <ul className="space-y-4 text-[15px] text-blue-100">
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><Users className="w-4 h-4" /></span>
+              <span>Рабочие группы по проектам и отделам, личные диалоги с коллегами</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><MessageSquare className="w-4 h-4" /></span>
+              <span>Файлы, ответы, реакции и уведомления на рабочем столе</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="mt-0.5 w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><Send className="w-4 h-4" /></span>
+              <span>Мост с Telegram — важные сообщения доходят и вне офиса</span>
+            </li>
+          </ul>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-blue-100/90">
+          <ShieldCheck className="w-4 h-4" />
+          <span>Изоляция данных компании и шифрование сессии</span>
+        </div>
+      </aside>
+
+      {/* Form */}
+      <main className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+        <div className="w-full max-w-[400px] space-y-7">
+          <div className="lg:hidden flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center">C</div>
+            <span className="text-[15px] font-semibold text-slate-900">Centras Chat</span>
+          </div>
+
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Centras Chat</h1>
-            <p className="text-xs text-slate-400 mt-1">Корпоративное защищённое пространство для рабочих коммуникаций</p>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Вход в мессенджер</h2>
+            <p className="text-sm text-gray-500 mt-1">Используйте корпоративный email и пароль сотрудника.</p>
           </div>
-        </div>
 
-        {/* Error Notification */}
-        {error && (
-          <div className="flex items-center gap-2.5 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-300 animate-in fade-in slide-in-from-top-1">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span className="font-medium">{error}</span>
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-300">Корпоративный Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="employee@centras.internal"
-                required
-                className="w-full bg-slate-950/70 border border-slate-800 text-slate-100 text-sm rounded-xl pl-10 pr-3.5 py-2.5 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
+          {error && (
+            <div role="alert" className="flex items-center gap-2.5 p-3 bg-rose-50 border border-rose-200 rounded-[10px] text-xs text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="font-medium">{error}</span>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-300">Пароль</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                required
-                className="w-full bg-slate-950/70 border border-slate-800 text-slate-100 text-sm rounded-xl pl-10 pr-3.5 py-2.5 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-700">Корпоративный email</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="employee@centras.internal"
+                  required
+                  className={inputClass}
+                />
+              </div>
             </div>
-          </div>
 
-          <Button
-            type="submit"
-            variant="primary"
-            className="w-full py-3 text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 group"
-            disabled={loading}
-          >
-            {loading ? (
-              <span>Авторизация...</span>
-            ) : (
-              <>
-                <span>Войти в систему</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              </>
-            )}
-          </Button>
-        </form>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-gray-700">Пароль</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  required
+                  className={inputClass}
+                />
+              </div>
+            </div>
 
-        {/* Corporate Profile Quick Selector for Testing */}
-        <div className="pt-4 border-t border-slate-800/70 space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span className="font-medium text-slate-400">Быстрый выбор сотрудника для проверки:</span>
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group w-full h-11 rounded-[10px] bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-60 text-white text-sm font-semibold shadow-[0_2px_6px_rgba(37,99,235,0.35)] transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <span>Авторизация…</span>
+              ) : (
+                <>
+                  <span>Войти</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
+            </button>
+          </form>
 
-          <div className="space-y-1.5">
-            {demoAccounts.map(account => {
-              const isSelected = email === account.email;
-              return (
-                <button
-                  key={account.email}
-                  type="button"
-                  onClick={() => handleQuickSelect(account.email)}
-                  className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
-                    isSelected
-                      ? 'bg-blue-600/10 border-blue-500/40 shadow-sm'
-                      : 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-800/40 hover:border-slate-700/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <img src={account.avatar} alt={account.name} className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 object-cover" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-slate-200">{account.name}</span>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.2 rounded border ${account.badgeColor}`}>
-                          {account.badge}
-                        </span>
+          <div className="pt-5 border-t border-gray-200 space-y-2.5">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.07em]">Демо-аккаунты для проверки</p>
+            <div className="space-y-1.5">
+              {demoAccounts.map(account => {
+                const isSelected = email === account.email;
+                return (
+                  <button
+                    key={account.email}
+                    type="button"
+                    onClick={() => handleQuickSelect(account.email)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
+                      isSelected
+                        ? 'bg-white shadow-[0_0_0_1px_#bfdbfe,0_2px_6px_rgba(15,23,42,0.06)]'
+                        : 'bg-white/60 hover:bg-white shadow-[0_0_0_1px_#e6e8ec]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <img src={account.avatar} alt={account.name} className="w-9 h-9 rounded-lg bg-gray-100 object-cover" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-semibold text-slate-900">{account.name}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${account.badgeColor}`}>
+                            {account.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 leading-tight">{account.role}</p>
                       </div>
-                      <p className="text-[11px] text-slate-400 leading-tight">{account.role}</p>
                     </div>
-                  </div>
-                  {isSelected && <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />}
-                </button>
-              );
-            })}
+                    {isSelected && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-
-        {/* Security Assurance Footer */}
-        <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Сквозная изоляция данных & аппаратное шифрование сессии</span>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

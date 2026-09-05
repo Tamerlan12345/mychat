@@ -11,7 +11,8 @@ import {
   TelegramIdentity,
   TelegramRelayLog,
   UserSettings,
-  UserStatus
+  UserStatus,
+  ConversationMember,
 } from '@/types';
 import type { TelegramLink } from './data-provider';
 
@@ -159,6 +160,17 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   },
 ];
 
+// Membership seed: public groups include everyone, private projects and DMs are scoped.
+const INITIAL_MEMBERS: ConversationMember[] = [
+  ...['u1', 'u2', 'u3', 'u4'].map(uid => ({ conversation_id: 'c1', user_id: uid, role: uid === 'u1' ? 'ADMIN' : 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u4'].map(uid => ({ conversation_id: 'c2', user_id: uid, role: uid === 'u1' ? 'ADMIN' : 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u2'].map(uid => ({ conversation_id: 'c3', user_id: uid, role: uid === 'u2' ? 'ADMIN' : 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u2', 'u4'].map(uid => ({ conversation_id: 'c4', user_id: uid, role: uid === 'u2' ? 'ADMIN' : 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u4'].map(uid => ({ conversation_id: 'c6', user_id: uid, role: uid === 'u1' ? 'ADMIN' : 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u2'].map(uid => ({ conversation_id: 'c5', user_id: uid, role: 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+  ...['u1', 'u3'].map(uid => ({ conversation_id: 'c7', user_id: uid, role: 'MEMBER', joined_at: new Date().toISOString() }) as ConversationMember),
+];
+
 const INITIAL_MESSAGES: Message[] = [
   {
     id: 'm1',
@@ -221,14 +233,14 @@ const INITIAL_MESSAGES: Message[] = [
 
 const INITIAL_BRANDING: BrandingConfig = {
   company_name: 'Centras Chat',
-  app_title: 'Centras Workspace',
+  app_title: 'Корпоративный чат',
   logo_url: '',
   logo_small_url: '',
   favicon_url: '',
   primary_color: '#2563eb',
-  secondary_color: '#475569',
-  background_color: '#0f172a',
-  login_background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+  secondary_color: '#6b7280',
+  background_color: '#f3f4f6',
+  login_background: 'linear-gradient(160deg, #1d4ed8 0%, #1e3a8a 100%)',
   updated_at: new Date().toISOString(),
 };
 
@@ -261,6 +273,7 @@ export class MockDataProvider implements IDataProvider {
   private departments: Department[] = [...INITIAL_DEPARTMENTS];
   private conversations: Conversation[] = [...INITIAL_CONVERSATIONS];
   private messages: Message[] = [...INITIAL_MESSAGES];
+  private members: ConversationMember[] = INITIAL_MEMBERS.map(m => ({ ...m }));
   private branding: BrandingConfig = { ...INITIAL_BRANDING };
   private auditLogs: AuditLog[] = [...INITIAL_AUDIT];
   private telegramIdentityMap: Map<string, TelegramIdentity> = new Map();
@@ -440,9 +453,23 @@ export class MockDataProvider implements IDataProvider {
       return {
         ...conv,
         last_message: lastMsg,
-        unread_count: convMsgs.length > 0 ? 1 : 0,
+        unread_count: this.countUnread(conv.id, userId, convMsgs),
       };
     });
+  }
+
+  private countUnread(conversationId: string, userId: string, convMsgs: Message[]): number {
+    const membership = this.members.find(m => m.conversation_id === conversationId && m.user_id === userId);
+    const lastReadIdx = membership?.last_read_message_id
+      ? convMsgs.findIndex(m => m.id === membership.last_read_message_id)
+      : -1;
+    return convMsgs.slice(lastReadIdx + 1).filter(m => m.sender_id !== userId && !m.deleted_at).length;
+  }
+
+  async getConversationMembers(conversationId: string): Promise<ConversationMember[]> {
+    return this.members
+      .filter(m => m.conversation_id === conversationId)
+      .map(m => ({ ...m, user: this.users.find(u => u.id === m.user_id) }));
   }
 
   async getConversationById(id: string): Promise<Conversation | null> {
@@ -475,18 +502,35 @@ export class MockDataProvider implements IDataProvider {
       unread_count: 0,
     };
     this.conversations.push(newConv);
+    const joinedAt = new Date().toISOString();
+    Array.from(new Set([data.created_by, ...data.member_ids])).forEach(uid => {
+      this.members.push({ conversation_id: newConv.id, user_id: uid, role: uid === data.created_by ? 'ADMIN' : 'MEMBER', joined_at: joinedAt });
+    });
     return newConv;
   }
 
   async addMembers(conversationId: string, userIds: string[]): Promise<boolean> {
+    const joinedAt = new Date().toISOString();
+    userIds.forEach(uid => {
+      if (!this.members.some(m => m.conversation_id === conversationId && m.user_id === uid)) {
+        this.members.push({ conversation_id: conversationId, user_id: uid, role: 'MEMBER', joined_at: joinedAt });
+      }
+    });
     return true;
   }
 
   async removeMember(conversationId: string, userId: string): Promise<boolean> {
+    this.members = this.members.filter(m => !(m.conversation_id === conversationId && m.user_id === userId));
     return true;
   }
 
   async markConversationAsRead(conversationId: string, userId: string, messageId: string): Promise<boolean> {
+    const membership = this.members.find(m => m.conversation_id === conversationId && m.user_id === userId);
+    if (membership) {
+      membership.last_read_message_id = messageId;
+    } else {
+      this.members.push({ conversation_id: conversationId, user_id: userId, role: 'MEMBER', joined_at: new Date().toISOString(), last_read_message_id: messageId });
+    }
     return true;
   }
 

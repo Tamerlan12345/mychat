@@ -19,7 +19,7 @@ export default function Home() {
   }, [isAuthenticated, isLoading, router]);
 
   return (
-    <div className="h-screen w-screen bg-slate-950 flex items-center justify-center text-xs text-slate-400">
+    <div className="h-screen w-screen bg-gray-100 flex items-center justify-center text-xs text-gray-500">
       Загрузка корпоративного мессенджера...
     </div>
   );

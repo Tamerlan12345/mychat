@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root {
+      --bg: #f3f4f6; --surface: #ffffff; --surface-2: #f9fafb; --surface-3: #f1f3f6;
+      --line: #e6e8ec; --line-soft: #eef0f3;
+      --t1: #0f172a; --t2: #374151; --t3: #6b7280; --t4: #8b93a1;
+      --accent: #2563eb; --accent-ink: #1d4ed8; --accent-soft: #eff6ff; --accent-line: #bfdbfe;
+      --ok: #10b981; --warn: #f59e0b; --off: #cbd5e1;
+      --sh-sm: 0 1px 2px rgba(15,23,42,0.05);
+      --sh-md: 0 4px 12px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.05);
+      --sh-lg: 0 12px 32px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.06);
+    }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; color: var(--t1); }
+    a { color: var(--accent); } a:hover { color: var(--accent-ink); }
+    .ic { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ic svg { display: block; }
+    .ib { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; color: var(--t3); }
+    .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+    .row { display: flex; align-items: center; gap: 12px; padding: 10px 10px; border-radius: 12px; }
+    .av { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700; letter-spacing: 0.2px; }
+    .dot { position: absolute; right: 0; bottom: 0; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--surface-2); }
+    .msg { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 14px; align-items: start; padding: 4px 12px; border-radius: 12px; }
+    .kbd { font-size: 10px; font-weight: 600; color: var(--t3); background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; font-family: inherit; }
+  </style>
+</helmet>
+
+<div style="width: 1440px; height: 900px; display: flex; background: #f3f4f6; color: #0f172a; overflow: hidden; font-size: 13px; line-height: 1.4;">
+
+  <!-- ======================= NAV RAIL ======================= -->
+  <div style="width: 68px; height: 900px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px 0 14px 0; background: #ffffff; border-right: 1px solid #e6e8ec; flex-shrink: 0;">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+      <div class="ic" style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(180deg, #3b82f6, #2563eb); color: #ffffff; font-weight: 800; font-size: 16px; margin-bottom: 14px; box-shadow: 0 2px 6px rgba(37,99,235,0.35);">C</div>
+
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; padding: 8px 0; border-radius: 12px; background: #eff6ff; color: #1d4ed8;">
+        <span style="position: absolute; left: -6px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: #2563eb;"></span>
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
+        <span style="font-size: 10px; font-weight: 600;">Чаты</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; padding: 8px 0; border-radius: 12px; color: #6b7280;">
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
+        <span style="font-size: 10px; font-weight: 500;">Группы</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; padding: 8px 0; border-radius: 12px; color: #6b7280;">
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg></span>
+        <span style="font-size: 10px; font-weight: 500;">Контакты</span>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; padding: 8px 0; border-radius: 12px; color: #6b7280;">
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg></span>
+        <span style="font-size: 10px; font-weight: 500;">Telegram</span>
+        <span style="position: absolute; top: 7px; right: 12px; width: 8px; height: 8px; border-radius: 50%; background: #2563eb; border: 2px solid #ffffff;"></span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+      <span class="ib" style="width: 40px; height: 40px; border-radius: 12px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></span>
+      <span class="ib" style="width: 40px; height: 40px; border-radius: 12px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
+      <div style="position: relative; margin-top: 8px;">
+        <div class="av" style="width: 38px; height: 38px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; font-size: 12px;">ТА</div>
+        <span class="dot" style="border-color: #ffffff; background: #10b981;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= CONVERSATION LIST ======================= -->
+  <div style="width: 312px; height: 900px; display: flex; flex-direction: column; background: #f9fafb; border-right: 1px solid #e6e8ec; flex-shrink: 0;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 18px 12px 18px;">
+      <span style="font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.4px;">Сообщения</span>
+      <span class="ib" style="width: 32px; height: 32px; background: #ffffff; border: 1px solid #e6e8ec; color: #374151; box-shadow: 0 1px 2px rgba(15,23,42,0.05);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+      </span>
+    </div>
+
+    <div style="padding: 0 12px 12px 12px;">
+      <div style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 8px 0 12px; background: #ffffff; border: 1px solid #e6e8ec; border-radius: 10px; color: #8b93a1; box-shadow: 0 1px 2px rgba(15,23,42,0.03);">
+        <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></span>
+        <span class="ell" style="flex-grow: 1; font-size: 13px;">Поиск</span>
+        <span class="kbd">Ctrl K</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 16px; padding: 0 8px; overflow: hidden;">
+
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 10.5px; font-weight: 600; color: #6b7280; letter-spacing: 0.7px; padding: 0 10px 6px 10px;">ЗАКРЕПЛЁННЫЕ</span>
+
+        <!-- active -->
+        <div class="row" style="background: #ffffff; box-shadow: 0 0 0 1px #e6e8ec, 0 2px 6px rgba(15,23,42,0.06);">
+          <div class="av" style="width: 42px; height: 42px; border-radius: 13px; background: #dbeafe; color: #1d4ed8; font-size: 12.5px;">КС</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 5px; min-width: 0;">
+                <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Проект КИАС</span>
+                <span class="ic" style="color: #8b93a1;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+              </div>
+              <span class="num" style="font-size: 11px; color: #6b7280;">14:32</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Вы: Да, давайте в 15:00 здесь же. Подключу…</span>
+          </div>
+        </div>
+
+        <!-- unread -->
+        <div class="row">
+          <div class="av" style="width: 42px; height: 42px; border-radius: 13px; background: #ede9fe; color: #6d28d9; font-size: 12.5px;">ОР</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Отдел разработки</span>
+              <span class="num" style="font-size: 11px; color: #1d4ed8; font-weight: 600;">14:05</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 12.5px; color: #374151;">Ержан: билд собран, можно тестировать</span>
+              <span class="num" style="min-width: 19px; height: 19px; padding: 0 6px; border-radius: 10px; background: #2563eb; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 10.5px; font-weight: 600; color: #6b7280; letter-spacing: 0.7px; padding: 0 10px 6px 10px;">НЕДАВНИЕ</span>
+
+        <div class="row">
+          <div style="position: relative;">
+            <div class="av" style="width: 42px; height: 42px; border-radius: 50%; background: #d1fae5; color: #047857; font-size: 12.5px;">АС</div>
+            <span class="dot" style="background: #10b981;"></span>
+          </div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Алия Сериковна</span>
+              <span class="num" style="font-size: 11px; color: #1d4ed8; font-weight: 600;">13:58</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 12.5px; color: #374151;">Отправила протокол встречи</span>
+              <span class="num" style="min-width: 19px; height: 19px; padding: 0 6px; border-radius: 10px; background: #2563eb; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- hover state -->
+        <div class="row" style="background: #f1f3f6;">
+          <div class="av" style="width: 42px; height: 42px; border-radius: 13px; background: #fef3c7; color: #b45309; font-size: 12.5px;">ОЧ</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Общий чат</span>
+              <span class="num" style="font-size: 11px; color: #6b7280;">12:40</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Мария: всем хорошего дня!</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div style="position: relative;">
+            <div class="av" style="width: 42px; height: 42px; border-radius: 50%; background: #ede9fe; color: #6d28d9; font-size: 12.5px;">ДА</div>
+            <span class="dot" style="background: #f59e0b;"></span>
+          </div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Данияр Ахметов</span>
+              <span class="num" style="font-size: 11px; color: #6b7280;">11:20</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Вы: созвонимся после обеда</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="av" style="width: 42px; height: 42px; border-radius: 13px; background: #fce7f3; color: #be185d; font-size: 12.5px;">МК</div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Маркетинг</span>
+              <span class="num" style="font-size: 11px; color: #6b7280;">10:05</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Айгерим: макеты баннеров в папке</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div style="position: relative;">
+            <div class="av" style="width: 42px; height: 42px; border-radius: 50%; background: #fce7f3; color: #be185d; font-size: 12.5px;">МК</div>
+            <span class="dot" style="background: #cbd5e1;"></span>
+          </div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Мария Ким</span>
+              <span class="num" style="font-size: 11px; color: #6b7280;">Вчера</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Хорошо, спасибо!</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="av" style="width: 42px; height: 42px; border-radius: 13px; background: #e0f2fe; color: #0369a1;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
+          </div>
+          <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span class="ell" style="font-size: 13.5px; font-weight: 600; color: #0f172a;">Клиенты · Telegram</span>
+              <span class="num" style="font-size: 11px; color: #6b7280;">Вчера</span>
+            </div>
+            <span class="ell" style="font-size: 12.5px; color: #6b7280;">Мост активен · 2 канала</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= CHAT ======================= -->
+  <div style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0; background: #ffffff;">
+
+    <!-- Header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; border-bottom: 1px solid #eef0f3; flex-shrink: 0;">
+      <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+        <div class="av" style="width: 40px; height: 40px; border-radius: 12px; background: #dbeafe; color: #1d4ed8; font-size: 12.5px;">КС</div>
+        <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 15px; font-weight: 700; color: #0f172a; letter-spacing: -0.2px;">Проект КИАС</span>
+            <span class="ic" style="color: #8b93a1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          </div>
+          <span style="font-size: 12px; color: #6b7280;">8 участников · <span style="color: #059669; font-weight: 500;">5 в сети</span></span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 2px;">
+        <div style="display: flex; align-items: center; margin-right: 12px;">
+          <div class="av" style="width: 28px; height: 28px; border-radius: 50%; background: #d1fae5; color: #047857; font-size: 9.5px; border: 2px solid #ffffff;">АС</div>
+          <div class="av" style="width: 28px; height: 28px; border-radius: 50%; background: #ede9fe; color: #6d28d9; font-size: 9.5px; border: 2px solid #ffffff; margin-left: -8px;">ДА</div>
+          <div class="av" style="width: 28px; height: 28px; border-radius: 50%; background: #fce7f3; color: #be185d; font-size: 9.5px; border: 2px solid #ffffff; margin-left: -8px;">МК</div>
+          <div class="av" style="width: 28px; height: 28px; border-radius: 50%; background: #f1f3f6; color: #6b7280; font-size: 9.5px; border: 2px solid #ffffff; margin-left: -8px;">+5</div>
+        </div>
+        <span class="ib"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></span>
+        <span class="ib"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></span>
+        <span class="ib"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"></path><rect width="14" height="12" x="2" y="6" rx="2"></rect></svg></span>
+        <span class="ib" style="background: #eff6ff; color: #1d4ed8;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></span>
+      </div>
+    </div>
+
+    <!-- Pinned strip -->
+    <div style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 24px; background: #f9fafb; border-bottom: 1px solid #eef0f3; flex-shrink: 0;">
+      <span class="ic" style="color: #2563eb;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg></span>
+      <span style="font-size: 12px; font-weight: 600; color: #1d4ed8;">Закреплено</span>
+      <span class="ell" style="flex-grow: 1; font-size: 12.5px; color: #374151;">Созвон по интеграции — сегодня в 15:00, ссылка в этом чате</span>
+      <span style="font-size: 11px; color: #6b7280;">1 из 1</span>
+    </div>
+
+    <!-- Timeline -->
+    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 16px 20px; overflow: hidden;">
+
+      <div style="display: flex; justify-content: center; padding-bottom: 6px;">
+        <span style="font-size: 11px; font-weight: 500; color: #6b7280; background: #f1f3f6; border-radius: 999px; padding: 4px 12px;">Сегодня</span>
+      </div>
+
+      <!-- Алия -->
+      <div class="msg">
+        <div class="av" style="width: 40px; height: 40px; border-radius: 50%; background: #d1fae5; color: #047857; font-size: 12.5px; margin-top: 2px;">АС</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; max-width: 640px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Алия Сериковна</span>
+            <span class="num" style="font-size: 11px; color: #8b93a1;">14:12</span>
+          </div>
+          <div style="font-size: 14px; line-height: 1.55; color: #1f2937;">Выложила итоговый отчёт по интеграции КИАС — посмотрите, пожалуйста, до конца дня.</div>
+          <div style="display: flex; align-items: center; gap: 12px; border: 1px solid #e6e8ec; border-radius: 12px; padding: 10px 12px; max-width: 400px; background: #f9fafb;">
+            <div class="ic" style="width: 36px; height: 36px; border-radius: 10px; background: #fee2e2; color: #dc2626;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+            </div>
+            <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+              <span class="ell" style="font-size: 12.5px; font-weight: 600; color: #0f172a;">Отчёт_по_интеграции_КИАС.pdf</span>
+              <span style="font-size: 11px; color: #6b7280;">PDF · 2,4 МБ</span>
+            </div>
+            <span class="ib" style="width: 30px; height: 30px; border-radius: 8px; background: #ffffff; border: 1px solid #e6e8ec;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 3px 9px;">👍 <span class="num" style="font-weight: 600;">3</span></span>
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #4b5563; background: #ffffff; border: 1px solid #e6e8ec; border-radius: 999px; padding: 3px 9px;">🔥 <span class="num" style="font-weight: 600;">1</span></span>
+            <span class="ic" style="width: 26px; height: 24px; border-radius: 999px; color: #8b93a1; border: 1px dashed #d5d9e0;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Данияр: hover state with action toolbar -->
+      <div class="msg" style="background: #f9fafb; position: relative;">
+        <div class="av" style="width: 40px; height: 40px; border-radius: 50%; background: #ede9fe; color: #6d28d9; font-size: 12.5px; margin-top: 2px;">ДА</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; max-width: 640px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Данияр Ахметов</span>
+            <span class="num" style="font-size: 11px; color: #8b93a1;">14:20</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 1px; border-left: 2px solid #2563eb; background: #eff6ff; border-radius: 0 8px 8px 0; padding: 6px 12px; max-width: 460px;">
+            <span style="font-size: 11.5px; font-weight: 600; color: #1d4ed8;">Алия Сериковна</span>
+            <span class="ell" style="font-size: 12px; color: #374151;">Посмотрите, пожалуйста, до конца дня.</span>
+          </div>
+          <div style="font-size: 14px; line-height: 1.55; color: #1f2937;">Посмотрел, по третьему разделу есть вопрос — созвонимся?</div>
+        </div>
+        <div style="position: absolute; right: 16px; top: -14px; display: flex; align-items: center; gap: 2px; padding: 3px; background: #ffffff; border: 1px solid #e6e8ec; border-radius: 10px; box-shadow: 0 4px 12px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.05);">
+          <span class="ib" style="width: 28px; height: 28px; border-radius: 7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg></span>
+          <span class="ib" style="width: 28px; height: 28px; border-radius: 7px; background: #eff6ff; color: #1d4ed8;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg></span>
+          <span class="ib" style="width: 28px; height: 28px; border-radius: 7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg></span>
+          <span class="ib" style="width: 28px; height: 28px; border-radius: 7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>
+        </div>
+      </div>
+
+      <!-- grouped continuation -->
+      <div class="msg" style="margin-top: -6px;">
+        <span class="num" style="font-size: 10.5px; color: #c4c8cf; text-align: center; padding-top: 4px;">14:21</span>
+        <div style="font-size: 14px; line-height: 1.55; color: #1f2937; max-width: 640px;">И ещё: в разделе 3.2 ссылка ведёт на старую схему БД.</div>
+      </div>
+
+      <!-- system -->
+      <div style="display: flex; justify-content: center; padding: 4px 0;">
+        <span style="font-size: 11.5px; color: #8b93a1;">Тамерлан добавил Ержана Нурланова в группу</span>
+      </div>
+
+      <!-- own -->
+      <div class="msg">
+        <div class="av" style="width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; font-size: 12.5px; margin-top: 2px;">ТА</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; max-width: 640px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Тамерлан А.</span>
+            <span style="font-size: 10px; font-weight: 600; color: #6b7280; background: #f1f3f6; border-radius: 4px; padding: 1px 5px; align-self: center;">вы</span>
+            <span class="num" style="font-size: 11px; color: #8b93a1;">14:32</span>
+            <span class="ic" style="color: #2563eb; align-self: center;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-5"></path><path d="m22 10-7.5 7.5L13 16"></path></svg></span>
+          </div>
+          <div style="font-size: 14px; line-height: 1.55; color: #1f2937;">Да, давайте в 15:00 здесь же. Подключу видеозвонок и позову Ержана.</div>
+        </div>
+      </div>
+
+      <!-- unread divider -->
+      <div style="display: flex; align-items: center; gap: 10px; padding: 2px 12px;">
+        <span style="flex-grow: 1; height: 1px; background: #bfdbfe;"></span>
+        <span style="font-size: 10.5px; font-weight: 600; color: #1d4ed8; letter-spacing: 0.5px;">НОВЫЕ</span>
+        <span style="flex-grow: 1; height: 1px; background: #bfdbfe;"></span>
+      </div>
+
+      <!-- Мария -->
+      <div class="msg">
+        <div class="av" style="width: 40px; height: 40px; border-radius: 50%; background: #fce7f3; color: #be185d; font-size: 12.5px; margin-top: 2px;">МК</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; max-width: 640px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <span style="font-size: 13.5px; font-weight: 700; color: #0f172a;">Мария Ким</span>
+            <span class="num" style="font-size: 11px; color: #8b93a1;">14:40</span>
+          </div>
+          <div style="font-size: 14px; line-height: 1.55; color: #1f2937;">Схему обновлю к созвону, ссылку заменю в отчёте.</div>
+        </div>
+      </div>
+
+      <!-- typing -->
+      <div class="msg" style="padding-top: 0;">
+        <span></span>
+        <div style="display: flex; align-items: center; gap: 7px;">
+          <span style="display: inline-flex; gap: 3px; align-items: center;">
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #d1d5db;"></span>
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #9ca3af;"></span>
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: #6b7280;"></span>
+          </span>
+          <span style="font-size: 11.5px; color: #6b7280;">Ержан Нурланов печатает…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Composer: focused, with reply + attachment -->
+    <div style="padding: 0 24px 20px 24px; flex-shrink: 0;">
+      <div style="display: flex; flex-direction: column; background: #ffffff; border: 1px solid #2563eb; border-radius: 14px; box-shadow: 0 0 0 3px #dbeafe, 0 2px 8px rgba(15,23,42,0.05);">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px 8px 14px; border-bottom: 1px solid #eef0f3;">
+          <span class="ic" style="color: #2563eb;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg></span>
+          <div style="flex-grow: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px;">
+            <span style="font-size: 12px; font-weight: 600; color: #1d4ed8;">Ответ Данияру Ахметову</span>
+            <span class="ell" style="font-size: 12px; color: #6b7280;">Посмотрел, по третьему разделу есть вопрос — созвонимся?</span>
+          </div>
+          <span class="ib" style="width: 24px; height: 24px; border-radius: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 2px; padding: 12px 16px 4px 16px; font-size: 14px; line-height: 1.5; color: #0f172a;">
+          <span>Да, созвонимся в 15:00. </span>
+          <span style="color: #1d4ed8; background: #eff6ff; border-radius: 4px; padding: 0 3px;">@Ержан</span>
+          <span>, посмотри раздел 3.2 до встречи</span>
+          <span style="width: 1.5px; height: 18px; background: #2563eb; border-radius: 1px; margin-left: 1px;"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px 16px 0 16px;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #374151; background: #f9fafb; border: 1px solid #e6e8ec; border-radius: 8px; padding: 4px 8px 4px 6px;">
+            <span class="ic" style="width: 18px; height: 18px; border-radius: 5px; background: #d1fae5; color: #047857;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg></span>
+            <span style="font-weight: 500;">Схема_БД_v3.xlsx</span>
+            <span style="color: #8b93a1;">184 КБ</span>
+            <span class="ic" style="color: #8b93a1;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px 8px 10px;">
+          <div style="display: flex; align-items: center; gap: 2px;">
+            <span class="ib" style="width: 32px; height: 32px; border-radius: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></span>
+            <span class="ib" style="width: 32px; height: 32px; border-radius: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" x2="9.01" y1="9" y2="9"></line><line x1="15" x2="15.01" y1="9" y2="9"></line></svg></span>
+            <span class="ib" style="width: 32px; height: 32px; border-radius: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path></svg></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #8b93a1;"><span class="kbd">Enter</span> отправить · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> новая строка</span>
+            <span class="ib" style="width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(180deg, #3b82f6, #2563eb); color: #ffffff; box-shadow: 0 2px 6px rgba(37,99,235,0.35);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= DETAILS PANEL ======================= -->
+  <div style="width: 300px; height: 900px; display: flex; flex-direction: column; gap: 20px; padding: 22px 20px; background: #ffffff; border-left: 1px solid #eef0f3; flex-shrink: 0; overflow: hidden;">
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 6px 0 2px 0;">
+      <div class="av" style="width: 64px; height: 64px; border-radius: 20px; background: #dbeafe; color: #1d4ed8; font-size: 19px;">КС</div>
+      <div style="display: flex; flex-direction: column; gap: 3px;">
+        <span style="font-size: 15px; font-weight: 700; color: #0f172a; letter-spacing: -0.2px;">Проект КИАС</span>
+        <span style="font-size: 12px; color: #6b7280;">Приватная группа · 8 участников</span>
+      </div>
+      <span style="font-size: 12.5px; line-height: 1.5; color: #4b5563; max-width: 236px;">Интеграция ERP КИАС с корпоративным мессенджером</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; border-radius: 12px; background: #f9fafb; border: 1px solid #eef0f3; color: #374151;">
+        <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg></span>
+        <span style="font-size: 10.5px; font-weight: 500;">Звук</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;">
+        <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg></span>
+        <span style="font-size: 10.5px; font-weight: 600;">Закреплён</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0; border-radius: 12px; background: #f9fafb; border: 1px solid #eef0f3; color: #374151;">
+        <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle><path d="M20 8v6"></path><path d="M23 11h-6"></path></svg></span>
+        <span style="font-size: 10.5px; font-weight: 500;">Добавить</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 12px; border: 1px solid #eef0f3;">
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: #0f172a;">Уведомления</span>
+        <span style="font-size: 11px; color: #6b7280;">Звук и push для этой группы</span>
+      </div>
+      <span style="display: inline-flex; align-items: center; width: 36px; height: 20px; border-radius: 999px; background: #2563eb; padding: 2px; box-sizing: border-box; justify-content: flex-end;"><span style="width: 16px; height: 16px; border-radius: 50%; background: #ffffff; box-shadow: 0 1px 2px rgba(15,23,42,0.2);"></span></span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 2px 6px 2px;">
+        <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Участники</span>
+        <span style="font-size: 11px; color: #059669; font-weight: 500;">5 в сети</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div style="position: relative;"><div class="av" style="width: 32px; height: 32px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; font-size: 10.5px;">ТА</div><span class="dot" style="border-color: #ffffff; width: 10px; height: 10px; background: #10b981;"></span></div>
+        <span class="ell" style="flex-grow: 1; font-size: 13px; font-weight: 500; color: #0f172a;">Тамерлан А.</span>
+        <span style="font-size: 10px; font-weight: 600; color: #b45309; background: #fef3c7; border-radius: 5px; padding: 2px 6px;">админ</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div style="position: relative;"><div class="av" style="width: 32px; height: 32px; border-radius: 50%; background: #d1fae5; color: #047857; font-size: 10.5px;">АС</div><span class="dot" style="border-color: #ffffff; width: 10px; height: 10px; background: #10b981;"></span></div>
+        <span class="ell" style="flex-grow: 1; font-size: 13px; font-weight: 500; color: #0f172a;">Алия Сериковна</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div style="position: relative;"><div class="av" style="width: 32px; height: 32px; border-radius: 50%; background: #ede9fe; color: #6d28d9; font-size: 10.5px;">ДА</div><span class="dot" style="border-color: #ffffff; width: 10px; height: 10px; background: #f59e0b;"></span></div>
+        <span class="ell" style="flex-grow: 1; font-size: 13px; font-weight: 500; color: #0f172a;">Данияр Ахметов</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div style="position: relative;"><div class="av" style="width: 32px; height: 32px; border-radius: 50%; background: #fce7f3; color: #be185d; font-size: 10.5px;">МК</div><span class="dot" style="border-color: #ffffff; width: 10px; height: 10px; background: #10b981;"></span></div>
+        <span class="ell" style="flex-grow: 1; font-size: 13px; font-weight: 500; color: #0f172a;">Мария Ким</span>
+      </div>
+      <span style="font-size: 12px; color: #2563eb; font-weight: 500; padding: 6px 2px;">Показать всех (8)</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 2px 6px 2px;">
+        <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">Файлы</span>
+        <span style="font-size: 11px; color: #2563eb; font-weight: 500;">Все 12</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div class="ic" style="width: 34px; height: 34px; border-radius: 9px; background: #fee2e2; color: #dc2626;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg></div>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <span class="ell" style="font-size: 12.5px; font-weight: 500; color: #0f172a;">Отчёт_по_интеграции_КИАС.pdf</span>
+          <span style="font-size: 11px; color: #6b7280;">Сегодня · Алия</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 6px 2px;">
+        <div class="ic" style="width: 34px; height: 34px; border-radius: 9px; background: #d1fae5; color: #047857;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg></div>
+        <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <span class="ell" style="font-size: 12.5px; font-weight: 500; color: #0f172a;">Схема_БД_v3.xlsx</span>
+          <span style="font-size: 11px; color: #6b7280;">Вчера · Ержан</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

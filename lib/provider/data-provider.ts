@@ -11,7 +11,8 @@ import {
   TelegramRelayLog,
   UserSettings,
   UserStatus,
-  UserRole
+  UserRole,
+  ConversationMember,
 } from '@/types';
 
 export interface TelegramLink {
@@ -46,6 +47,7 @@ export interface IDataProvider {
     is_private?: boolean;
     member_ids: string[];
   }): Promise<Conversation>;
+  getConversationMembers(conversationId: string): Promise<ConversationMember[]>;
   addMembers(conversationId: string, userIds: string[]): Promise<boolean>;
   removeMember(conversationId: string, userId: string): Promise<boolean>;
   markConversationAsRead(conversationId: string, userId: string, messageId: string): Promise<boolean>;

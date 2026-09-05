@@ -15,7 +15,7 @@ export const BrandingForm: React.FC = () => {
     BrandingService.getBranding().then(setConfig);
   }, []);
 
-  if (!config) return <div className="text-xs text-slate-500">Загрузка брендинга...</div>;
+  if (!config) return <div className="text-xs text-gray-400">Загрузка брендинга...</div>;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,22 +27,22 @@ export const BrandingForm: React.FC = () => {
   };
 
   return (
-    <form onSubmit={handleSave} className="max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+    <form onSubmit={handleSave} className="max-w-2xl bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-6">
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-brand-primary flex items-center justify-center text-white">
             <Palette className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">White-Label Branding Engine</h2>
-            <p className="text-xs text-slate-400">
-              Настройка фирменного стиля и айдентики компании без перезапуска приложения (Tech Spec §20–21)
+            <h2 className="text-base font-bold text-slate-900">Брендинг компании</h2>
+            <p className="text-xs text-gray-500">
+              Название, логотип и цвета применяются сразу, без перезапуска приложения
             </p>
           </div>
         </div>
 
         {saved && (
-          <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full animate-in fade-in">
+          <span className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full animate-in fade-in">
             <CheckCircle2 className="w-4 h-4" />
             Применено!
           </span>
@@ -79,74 +79,74 @@ export const BrandingForm: React.FC = () => {
         </div>
 
         {/* Color Palette Controls */}
-        <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-4">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
+          <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
             Цветовая палитра интерфейса
           </h3>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Основной цвет (Primary)</label>
+              <label className="block text-xs text-gray-500 mb-1">Основной цвет (Primary)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={config.primary_color}
                   onChange={e => setConfig({ ...config, primary_color: e.target.value })}
-                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                  className="w-8 h-8 rounded border border-gray-300 bg-transparent cursor-pointer"
                 />
-                <span className="text-xs font-mono text-slate-300">{config.primary_color}</span>
+                <span className="text-xs font-mono text-gray-700">{config.primary_color}</span>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Вторичный цвет (Secondary)</label>
+              <label className="block text-xs text-gray-500 mb-1">Вторичный цвет (Secondary)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={config.secondary_color}
                   onChange={e => setConfig({ ...config, secondary_color: e.target.value })}
-                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                  className="w-8 h-8 rounded border border-gray-300 bg-transparent cursor-pointer"
                 />
-                <span className="text-xs font-mono text-slate-300">{config.secondary_color}</span>
+                <span className="text-xs font-mono text-gray-700">{config.secondary_color}</span>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Фон приложения (Background)</label>
+              <label className="block text-xs text-gray-500 mb-1">Фон приложения (Background)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={config.background_color}
                   onChange={e => setConfig({ ...config, background_color: e.target.value })}
-                  className="w-8 h-8 rounded border border-slate-700 bg-transparent cursor-pointer"
+                  className="w-8 h-8 rounded border border-gray-300 bg-transparent cursor-pointer"
                 />
-                <span className="text-xs font-mono text-slate-300">{config.background_color}</span>
+                <span className="text-xs font-mono text-gray-700">{config.background_color}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Live Preview Box */}
-        <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
             Предпросмотр кнопки брендинга
           </span>
           <div className="flex items-center gap-3">
             <button
               type="button"
               style={{ backgroundColor: config.primary_color }}
-              className="px-4 py-2 text-white text-xs font-bold rounded-lg shadow-lg transition-transform active:scale-95"
+              className="px-4 py-2 text-slate-900 text-xs font-bold rounded-lg shadow-lg transition-transform active:scale-95"
             >
               Кнопка {config.company_name}
             </button>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-gray-500">
               Все элементы UI мгновенно перекрашиваются при сохранении.
             </span>
           </div>
         </div>
       </div>
 
-      <div className="pt-4 border-t border-slate-800 flex justify-end">
+      <div className="pt-4 border-t border-gray-200 flex justify-end">
         <Button type="submit" variant="primary">
           Сохранить и применить брендинг
         </Button>

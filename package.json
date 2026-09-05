@@ -15,7 +15,8 @@
     "desktop:compile": "tsc -p electron/tsconfig.json",
     "desktop:dev": "concurrently -k \"next dev\" \"wait-on http://127.0.0.1:3000 && electron .\"",
     "desktop:build": "next build && tsc -p electron/tsconfig.json",
-    "build:installer": "tsx scripts/build-installer.ts"
+    "build:installer": "tsx scripts/build-installer.ts",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

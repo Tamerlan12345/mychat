@@ -19,7 +19,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 3. Branding Initial Row
 INSERT INTO branding_config (id, company_name, app_title, primary_color, secondary_color, background_color) VALUES
-(1, 'Centras Chat', 'Corporate Messenger MVP', '#2563eb', '#475569', '#0f172a')
+(1, 'Centras Chat', 'Корпоративный чат', '#2563eb', '#6b7280', '#f3f4f6')
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. Initial Conversations (Channels & Groups)

@@ -12,6 +12,7 @@ import {
   TelegramIdentity,
   TelegramRelayLog,
   UserSettings,
+  ConversationMember,
 } from '@/types';
 import type { TelegramLink } from './data-provider';
 
@@ -88,6 +89,17 @@ export function mapConversationRow(row: any): Conversation {
     updated_at: row.updated_at,
     is_private: row.is_private ?? undefined,
     description: row.description ?? undefined,
+  };
+}
+
+export function mapConversationMemberRow(row: any): ConversationMember {
+  return {
+    conversation_id: row.conversation_id,
+    user_id: row.user_id,
+    role: row.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
+    joined_at: row.joined_at,
+    last_read_message_id: row.last_read_message_id ?? undefined,
+    user: row.profiles ? mapProfileRow(row.profiles) : undefined,
   };
 }
 
@@ -381,6 +393,16 @@ export class SupabaseDataProvider implements IDataProvider {
     }
 
     return mapConversationRow(convRow);
+  }
+
+  async getConversationMembers(conversationId: string): Promise<ConversationMember[]> {
+    const { data, error } = await this.client
+      .from('conversation_members')
+      .select('conversation_id, user_id, role, joined_at, last_read_message_id, profiles(*, departments(name))')
+      .eq('conversation_id', conversationId)
+      .order('joined_at', { ascending: true });
+    if (error) throw new Error(`getConversationMembers failed: ${error.message}`);
+    return (data ?? []).map(mapConversationMemberRow);
   }
 
   async addMembers(conversationId: string, userIds: string[]): Promise<boolean> {
