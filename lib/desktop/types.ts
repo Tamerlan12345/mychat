@@ -53,8 +53,10 @@ export interface ISecureStorage {
 
 export interface ServerConnectionConfig {
   serverUrl: string;
+  /** Empty in gateway mode — the gateway holds the keys. */
   anonKey: string;
   isCustom: boolean;
+  mode?: 'gateway' | 'direct' | 'none';
 }
 
 declare global {

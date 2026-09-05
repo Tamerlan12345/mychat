@@ -8,6 +8,7 @@ export const STORAGE_KEY_ANON_KEY = 'centras_custom_anon_key';
 
 const INITIAL_ENV_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const INITIAL_ENV_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const INITIAL_ENV_SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL;
 
 /**
  * Validates that server URL has a valid format and uses HTTP or HTTPS protocol.
@@ -74,20 +75,25 @@ export class ConnectionManager {
       const customKey = await secureStorage.getItem(STORAGE_KEY_ANON_KEY);
 
       if (customUrl && customKey) {
-        return {
-          serverUrl: customUrl,
-          anonKey: customKey,
-          isCustom: true,
-        };
+        return { serverUrl: customUrl, anonKey: customKey, isCustom: true, mode: 'direct' };
+      }
+      if (customUrl) {
+        return { serverUrl: customUrl, anonKey: '', isCustom: true, mode: 'gateway' };
       }
     } catch {
       // Fallback to environment variables on storage failure
     }
 
+    const gatewayUrl = process.env.NEXT_PUBLIC_SERVER_URL || INITIAL_ENV_SERVER_URL;
+    if (gatewayUrl) {
+      return { serverUrl: gatewayUrl, anonKey: '', isCustom: false, mode: 'gateway' };
+    }
+    const directUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || this.defaultUrl || '';
     return {
-      serverUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || this.defaultUrl || '',
+      serverUrl: directUrl,
       anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || this.defaultAnonKey || '',
       isCustom: false,
+      mode: directUrl ? 'direct' : 'none',
     };
   }
 
@@ -95,15 +101,23 @@ export class ConnectionManager {
    * Validates and persists custom server connection configuration.
    * Updates runtime environment and invalidates data/auth provider caches.
    */
-  async saveConfig(config: { serverUrl: string; anonKey: string }): Promise<void> {
+  async saveConfig(config: { serverUrl: string; anonKey?: string }): Promise<void> {
     const validatedUrl = validateServerUrl(config.serverUrl);
-    const validatedKey = validateAnonKey(config.anonKey);
+    const key = config.anonKey?.trim();
 
     await secureStorage.setItem(STORAGE_KEY_URL, validatedUrl);
-    await secureStorage.setItem(STORAGE_KEY_ANON_KEY, validatedKey);
-
-    process.env.NEXT_PUBLIC_SUPABASE_URL = validatedUrl;
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = validatedKey;
+    if (key) {
+      // Direct Supabase access (no gateway): URL + anon key.
+      const validatedKey = validateAnonKey(key);
+      await secureStorage.setItem(STORAGE_KEY_ANON_KEY, validatedKey);
+      process.env.NEXT_PUBLIC_SUPABASE_URL = validatedUrl;
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = validatedKey;
+      delete process.env.NEXT_PUBLIC_SERVER_URL;
+    } else {
+      // Company gateway: the only thing the client needs to know.
+      await secureStorage.removeItem(STORAGE_KEY_ANON_KEY);
+      process.env.NEXT_PUBLIC_SERVER_URL = validatedUrl;
+    }
 
     resetDataProvider();
     resetAuthProvider();
@@ -119,6 +133,12 @@ export class ConnectionManager {
 
     const fallbackUrl = this.defaultUrl ?? INITIAL_ENV_URL;
     const fallbackKey = this.defaultAnonKey ?? INITIAL_ENV_KEY;
+
+    if (INITIAL_ENV_SERVER_URL !== undefined) {
+      process.env.NEXT_PUBLIC_SERVER_URL = INITIAL_ENV_SERVER_URL;
+    } else {
+      delete process.env.NEXT_PUBLIC_SERVER_URL;
+    }
 
     if (fallbackUrl !== undefined) {
       process.env.NEXT_PUBLIC_SUPABASE_URL = fallbackUrl;
@@ -137,10 +157,12 @@ export class ConnectionManager {
   }
 
   /**
-   * Tests connection health against the specified or currently configured server URL.
+   * Tests connection health. In gateway mode (no anon key) the probe is the gateway's /healthz;
+   * in direct mode it is the Supabase URL itself with the anon key attached.
    */
   async testConnection(targetUrl?: string, anonKey?: string): Promise<PingServerResult> {
-    const url = targetUrl || (await this.getActiveConfig()).serverUrl;
+    const active = await this.getActiveConfig();
+    const url = targetUrl || active.serverUrl;
     if (!url) {
       return { ok: false, error: 'Server URL is not configured' };
     }
@@ -151,48 +173,39 @@ export class ConnectionManager {
       return { ok: false, error: err.message || 'Invalid server URL' };
     }
 
+    const key = anonKey?.trim() || (targetUrl ? undefined : active.anonKey || undefined);
+    const probeUrl = key ? url : `${url.replace(/\/+$/, '')}/healthz`;
+
     // 1. Electron desktop bridge delegation
     if (typeof window !== 'undefined' && window.desktopBridge?.pingServer) {
       try {
-        return await window.desktopBridge.pingServer(url);
+        return await window.desktopBridge.pingServer(probeUrl);
       } catch (err: any) {
         return { ok: false, error: err.message || 'Desktop bridge ping failed' };
       }
     }
 
     // 2. Browser / Node fetch health check with timeout
-    try {
-      const headers: Record<string, string> = {};
-      const key = anonKey || (await this.getActiveConfig()).anonKey;
-      if (key) {
-        headers['apikey'] = key;
-        headers['Authorization'] = `Bearer ${key}`;
-      }
-
-      const headController = new AbortController();
-      const headTimeoutId = setTimeout(() => headController.abort(), 5000);
+    const headers: Record<string, string> = {};
+    if (key) {
+      headers['apikey'] = key;
+      headers['Authorization'] = `Bearer ${key}`;
+    }
+    const probe = async (method: 'HEAD' | 'GET') => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       try {
-        const response = await fetch(url, {
-          method: 'HEAD',
-          headers,
-          signal: headController.signal,
-        });
+        const response = await fetch(probeUrl, { method, headers, signal: controller.signal });
         return { ok: response.ok, status: response.status };
-      } catch {
-        const getController = new AbortController();
-        const getTimeoutId = setTimeout(() => getController.abort(), 5000);
-        try {
-          const response = await fetch(url, {
-            method: 'GET',
-            headers,
-            signal: getController.signal,
-          });
-          return { ok: response.ok, status: response.status };
-        } finally {
-          clearTimeout(getTimeoutId);
-        }
       } finally {
-        clearTimeout(headTimeoutId);
+        clearTimeout(timeoutId);
+      }
+    };
+    try {
+      try {
+        return await probe('HEAD');
+      } catch {
+        return await probe('GET');
       }
     } catch (err: any) {
       return { ok: false, error: err.message || 'Connection failed' };
@@ -205,8 +218,13 @@ export class ConnectionManager {
   async init(): Promise<ServerConnectionConfig> {
     const config = await this.getActiveConfig();
     if (config.isCustom) {
-      process.env.NEXT_PUBLIC_SUPABASE_URL = config.serverUrl;
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = config.anonKey;
+      if (config.mode === 'gateway') {
+        process.env.NEXT_PUBLIC_SERVER_URL = config.serverUrl;
+      } else {
+        process.env.NEXT_PUBLIC_SUPABASE_URL = config.serverUrl;
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = config.anonKey;
+        delete process.env.NEXT_PUBLIC_SERVER_URL;
+      }
       resetDataProvider();
       resetAuthProvider();
     }

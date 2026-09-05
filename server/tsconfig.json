@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "jsx": "preserve",
+    "types": ["node"],
+    "plugins": []
+  },
+  "include": ["./src/**/*.ts", "../lib/**/*.ts", "../types/**/*.ts", "../app/api/**/*.ts"],
+  "exclude": ["../node_modules", "**/*.test.ts"]
+}

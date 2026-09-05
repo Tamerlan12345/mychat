@@ -1,0 +1,7 @@
+# Automatic HTTPS (Let's Encrypt) for the gateway. WebSocket upgrades pass through untouched.
+{$GATEWAY_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy gateway:8080 {
+		flush_interval -1
+	}
+}

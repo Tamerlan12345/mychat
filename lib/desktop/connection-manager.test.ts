@@ -9,6 +9,7 @@ describe('ConnectionManager', () => {
     process.env = { ...ORIGINAL_ENV };
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    delete process.env.NEXT_PUBLIC_SERVER_URL;
     await secureStorage.clear();
     vi.restoreAllMocks();
   });
@@ -31,6 +32,7 @@ describe('ConnectionManager', () => {
         serverUrl: 'https://default.supabase.co',
         anonKey: 'default-anon-key',
         isCustom: false,
+        mode: 'direct',
       });
     });
 
@@ -42,6 +44,7 @@ describe('ConnectionManager', () => {
         serverUrl: '',
         anonKey: '',
         isCustom: false,
+        mode: 'none',
       });
     });
 
@@ -57,6 +60,33 @@ describe('ConnectionManager', () => {
         serverUrl: 'https://custom-server.example.com',
         anonKey: 'custom-jwt-key',
         isCustom: true,
+        mode: 'direct',
+      });
+    });
+
+    it('treats a server URL without a key as the company gateway', async () => {
+      const mgr = new ConnectionManager();
+      await mgr.saveConfig({ serverUrl: 'https://chat.company.kz/' });
+
+      const config = await mgr.getActiveConfig();
+      expect(config).toEqual({
+        serverUrl: 'https://chat.company.kz',
+        anonKey: '',
+        isCustom: true,
+        mode: 'gateway',
+      });
+      expect(process.env.NEXT_PUBLIC_SERVER_URL).toBe('https://chat.company.kz');
+      expect(await secureStorage.getItem('centras_custom_anon_key')).toBeNull();
+    });
+
+    it('uses NEXT_PUBLIC_SERVER_URL as the default gateway when nothing is stored', async () => {
+      process.env.NEXT_PUBLIC_SERVER_URL = 'https://chat.company.kz';
+      const mgr = new ConnectionManager();
+      expect(await mgr.getActiveConfig()).toEqual({
+        serverUrl: 'https://chat.company.kz',
+        anonKey: '',
+        isCustom: false,
+        mode: 'gateway',
       });
     });
   });
@@ -90,11 +120,13 @@ describe('ConnectionManager', () => {
       ).rejects.toThrow();
     });
 
-    it('rejects empty or whitespace anon keys', async () => {
+    it('treats a whitespace-only anon key as "no key" — gateway mode, nothing stored for the key', async () => {
       const mgr = new ConnectionManager();
-      await expect(
-        mgr.saveConfig({ serverUrl: 'https://api.example.com', anonKey: '   ' })
-      ).rejects.toThrow(/Anon key must be a non-empty string/i);
+      await mgr.saveConfig({ serverUrl: 'https://api.example.com', anonKey: '   ' });
+
+      expect(process.env.NEXT_PUBLIC_SERVER_URL).toBe('https://api.example.com');
+      expect(await secureStorage.getItem('centras_custom_anon_key')).toBeNull();
+      expect((await mgr.getActiveConfig()).mode).toBe('gateway');
     });
 
     it('strips trailing slashes from valid URLs', async () => {
@@ -146,6 +178,7 @@ describe('ConnectionManager', () => {
         serverUrl: 'https://default.supabase.co',
         anonKey: 'default-anon-key',
         isCustom: false,
+        mode: 'direct',
       });
 
       expect(process.env.NEXT_PUBLIC_SUPABASE_URL).toBe('https://default.supabase.co');
@@ -164,10 +197,14 @@ describe('ConnectionManager', () => {
       };
 
       const mgr = new ConnectionManager();
+      // No key → gateway mode → the probe is the gateway health endpoint.
       const res = await mgr.testConnection('https://server.example.com');
-
-      expect(pingMock).toHaveBeenCalledWith('https://server.example.com');
+      expect(pingMock).toHaveBeenCalledWith('https://server.example.com/healthz');
       expect(res).toEqual({ ok: true, status: 200 });
+
+      // With a key → direct Supabase mode → the URL itself is probed.
+      await mgr.testConnection('https://proj.supabase.co', 'anon-key');
+      expect(pingMock).toHaveBeenCalledWith('https://proj.supabase.co');
 
       delete (globalThis as any).window;
     });

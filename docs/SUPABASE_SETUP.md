@@ -29,6 +29,10 @@ projects, but if your project's owner role ever lacks privileges to alter the
 publication, do it manually instead: Database → Replication → toggle on the `messages`
 table for the `supabase_realtime` publication.
 
+### Migration 005 — integration outbox
+
+Apply `supabase/migrations/005_integration_outbox.sql` when you run the gateway (`docs/GATEWAY.md`): it creates `integration_outbox`, the triggers that enqueue `message.created` / `member.*` events and the `claim/complete/fail/retry/cleanup_outbox` functions (service role only). Without the gateway the table simply accumulates events that administrators can inspect.
+
 ### Migration 004 — conversation list RPC
 
 Apply `supabase/migrations/004_conversations_overview.sql` as well: it adds the `conversations_overview()` function (one round trip for the sidebar) and an index on `messages (conversation_id, created_at)`. The client detects a missing function and falls back to per-conversation queries, so the app keeps working before the migration is applied — just slower.
