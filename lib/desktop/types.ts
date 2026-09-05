@@ -3,12 +3,23 @@ export interface PlatformInfo {
   arch: string;
   version: string;
   isElectron: boolean;
+  /** False for dev-time electron.exe runs; login-item registration is only meaningful when true. */
+  isPackaged?: boolean;
+  /** True when the OS draws the caption buttons (Windows titleBarOverlay); the titlebar then only reserves space. */
+  hasNativeWindowControls?: boolean;
 }
 
 export interface PingServerResult {
   ok: boolean;
   status?: number;
   error?: string;
+}
+
+export interface DesktopPreferences {
+  launchAtLogin: boolean;
+  closeToTray: boolean;
+  zoomFactor: number;
+  trayHintShown: boolean;
 }
 
 export interface DesktopBridge {
@@ -27,6 +38,9 @@ export interface DesktopBridge {
   closeWindow?: () => Promise<boolean>;
   isWindowMaximized?: () => Promise<boolean>;
   showNotification?: (options: { title: string; body: string; silent?: boolean }) => Promise<boolean>;
+  getPreferences?: () => Promise<DesktopPreferences>;
+  setPreferences?: (update: Partial<DesktopPreferences>) => Promise<DesktopPreferences>;
+  onWindowStateChanged?: (callback: (state: { isMaximized: boolean }) => void) => () => void;
 }
 
 export interface ISecureStorage {

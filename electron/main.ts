@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell, Menu, Tray, nativeImage, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage, shell, Menu, Tray, nativeImage, Notification, clipboard, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -44,6 +44,137 @@ function saveWindowState(win: BrowserWindow): void {
   } catch (err) {
     console.warn('Failed to persist window state:', err);
   }
+}
+
+/**
+ * Desktop preferences: autostart, tray behaviour, zoom. Stored as plain JSON in userData —
+ * nothing here is secret, so it stays out of the DPAPI vault.
+ */
+const PREFERENCES_FILE = 'desktop-preferences.json';
+const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.5];
+const START_MINIMIZED_FLAG = '--start-minimized';
+
+export interface DesktopPreferences {
+  launchAtLogin: boolean;
+  closeToTray: boolean;
+  zoomFactor: number;
+  trayHintShown: boolean;
+}
+
+const DEFAULT_PREFERENCES: DesktopPreferences = {
+  launchAtLogin: false,
+  closeToTray: true,
+  zoomFactor: 1,
+  trayHintShown: false,
+};
+
+export function sanitizePreferences(input: unknown): Partial<DesktopPreferences> {
+  const out: Partial<DesktopPreferences> = {};
+  if (typeof input !== 'object' || input === null) return out;
+  const src = input as Record<string, unknown>;
+  if (typeof src.launchAtLogin === 'boolean') out.launchAtLogin = src.launchAtLogin;
+  if (typeof src.closeToTray === 'boolean') out.closeToTray = src.closeToTray;
+  if (typeof src.trayHintShown === 'boolean') out.trayHintShown = src.trayHintShown;
+  if (typeof src.zoomFactor === 'number' && Number.isFinite(src.zoomFactor)) {
+    out.zoomFactor = Math.min(1.5, Math.max(0.8, Math.round(src.zoomFactor * 100) / 100));
+  }
+  return out;
+}
+
+function preferencesPath(): string {
+  return path.join(app.getPath('userData'), PREFERENCES_FILE);
+}
+
+function readPreferences(): DesktopPreferences {
+  try {
+    const file = preferencesPath();
+    if (fs.existsSync(file)) {
+      return { ...DEFAULT_PREFERENCES, ...sanitizePreferences(JSON.parse(fs.readFileSync(file, 'utf-8'))) };
+    }
+  } catch (err) {
+    console.warn('Failed to read desktop preferences:', err);
+  }
+  return { ...DEFAULT_PREFERENCES };
+}
+
+function writePreferences(update: Partial<DesktopPreferences>): DesktopPreferences {
+  const next = { ...readPreferences(), ...sanitizePreferences(update) };
+  try {
+    fs.writeFileSync(preferencesPath(), JSON.stringify(next, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Failed to persist desktop preferences:', err);
+  }
+  return next;
+}
+
+function applyLoginItem(enabled: boolean): void {
+  // Registering the dev-time electron.exe as a login item would be wrong; only packaged builds qualify.
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: enabled, path: process.execPath, args: [START_MINIMIZED_FLAG] });
+}
+
+function setZoom(win: BrowserWindow, factor: number): void {
+  const clamped = sanitizePreferences({ zoomFactor: factor }).zoomFactor ?? 1;
+  win.webContents.setZoomFactor(clamped);
+  writePreferences({ zoomFactor: clamped });
+}
+
+function stepZoom(win: BrowserWindow, direction: 1 | -1): void {
+  const current = win.webContents.getZoomFactor();
+  const idx = ZOOM_STEPS.findIndex(step => Math.abs(step - current) < 0.01);
+  const nextIdx = Math.min(ZOOM_STEPS.length - 1, Math.max(0, (idx === -1 ? 2 : idx) + direction));
+  setZoom(win, ZOOM_STEPS[nextIdx]);
+}
+
+/**
+ * Native right-click menu: Chromium gives frameless Electron windows none at all, so paste and
+ * spelling corrections would otherwise be unreachable with the mouse.
+ */
+function attachContextMenu(win: BrowserWindow): void {
+  win.webContents.on('context-menu', (_event, params) => {
+    const template: Electron.MenuItemConstructorOptions[] = [];
+
+    if (params.misspelledWord) {
+      const suggestions = params.dictionarySuggestions.slice(0, 5);
+      if (suggestions.length === 0) {
+        template.push({ label: 'Нет вариантов исправления', enabled: false });
+      }
+      for (const suggestion of suggestions) {
+        template.push({ label: suggestion, click: () => win.webContents.replaceMisspelling(suggestion) });
+      }
+      template.push(
+        {
+          label: 'Добавить в словарь',
+          click: () => win.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        },
+        { type: 'separator' }
+      );
+    }
+
+    if (params.isEditable) {
+      template.push(
+        { label: 'Вырезать', role: 'cut', enabled: params.editFlags.canCut },
+        { label: 'Копировать', role: 'copy', enabled: params.editFlags.canCopy },
+        { label: 'Вставить', role: 'paste', enabled: params.editFlags.canPaste },
+        { type: 'separator' },
+        { label: 'Выделить всё', role: 'selectAll' }
+      );
+    } else if (params.selectionText.trim()) {
+      template.push({ label: 'Копировать', role: 'copy' });
+    }
+
+    if (params.linkURL) {
+      if (template.length > 0) template.push({ type: 'separator' });
+      template.push(
+        { label: 'Открыть ссылку в браузере', click: () => safeOpenExternal(params.linkURL) },
+        { label: 'Копировать адрес ссылки', click: () => clipboard.writeText(params.linkURL) }
+      );
+    }
+
+    if (template.length > 0) {
+      Menu.buildFromTemplate(template).popup({ window: win });
+    }
+  });
 }
 
 /**
@@ -396,20 +527,36 @@ function registerIpcHandlers(): void {
       arch: process.arch,
       version: app.getVersion(),
       isElectron: true,
+      isPackaged: app.isPackaged,
+      // Windows gets the OS-drawn caption buttons (titleBarOverlay); other platforms draw their own.
+      hasNativeWindowControls: process.platform === 'win32',
     };
   });
 
   ipcMain.handle('desktop:set-badge-count', (_event, count: number) => {
-    const badgeCount = typeof count === 'number' && count >= 0 ? count : 0;
+    const badgeCount = typeof count === 'number' && count >= 0 ? Math.floor(count) : 0;
     if (typeof app.setBadgeCount === 'function') {
       app.setBadgeCount(badgeCount);
     }
-    if (mainWindow && process.platform === 'win32') {
-      if (badgeCount > 0) {
-        mainWindow.flashFrame(true);
-      }
+    tray?.setToolTip(badgeCount > 0 ? `Centras Chat · непрочитанных: ${badgeCount}` : 'Centras Chat');
+    if (mainWindow && process.platform === 'win32' && badgeCount > 0 && !mainWindow.isFocused()) {
+      mainWindow.flashFrame(true);
     }
     return true;
+  });
+
+  ipcMain.handle('desktop:get-preferences', () => readPreferences());
+
+  ipcMain.handle('desktop:set-preferences', (_event, ...args: any[]) => {
+    const update = sanitizePreferences(args[0]);
+    const next = writePreferences(update);
+    if (typeof update.launchAtLogin === 'boolean') {
+      applyLoginItem(next.launchAtLogin);
+    }
+    if (typeof update.zoomFactor === 'number' && mainWindow) {
+      mainWindow.webContents.setZoomFactor(next.zoomFactor);
+    }
+    return next;
   });
 
   ipcMain.handle('desktop:ping-server', async (_event, ...args: any[]) => {
@@ -559,7 +706,14 @@ async function createWindow(): Promise<void> {
     minWidth: 1024,
     minHeight: 680,
     show: false,
-    frame: false,
+    // On Windows the OS draws the caption buttons over our 36px titlebar (Snap Layouts, hover
+    // animations and accessibility come for free); elsewhere the renderer draws its own buttons.
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: { color: '#ffffff', symbolColor: '#6b7280', height: 36 },
+        }
+      : { frame: false }),
     // Matches the web app's page background so there is no dark flash before first paint.
     backgroundColor: '#f3f4f6',
     title: 'Centras Chat',
@@ -569,11 +723,41 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
+      spellcheck: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
+  const startMinimized = process.argv.includes(START_MINIMIZED_FLAG);
+
+  attachContextMenu(mainWindow);
+
+  // Ctrl+= / Ctrl+- / Ctrl+0 — there is no application menu to provide the usual zoom accelerators.
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (!mainWindow || input.type !== 'keyDown' || !input.control || input.alt || input.meta) return;
+    if (input.key === '=' || input.key === '+') {
+      event.preventDefault();
+      stepZoom(mainWindow, 1);
+    } else if (input.key === '-') {
+      event.preventDefault();
+      stepZoom(mainWindow, -1);
+    } else if (input.key === '0') {
+      event.preventDefault();
+      setZoom(mainWindow, 1);
+    }
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomFactor(readPreferences().zoomFactor);
+  });
+
+  const broadcastWindowState = () => {
+    if (!mainWindow) return;
+    mainWindow.webContents.send('desktop:window-state-changed', { isMaximized: mainWindow.isMaximized() });
+  };
+  mainWindow.on('maximize', broadcastWindowState);
+  mainWindow.on('unmaximize', broadcastWindowState);
 
   if (!isDev) {
     mainWindow.webContents.on('devtools-opened', () => {
@@ -607,7 +791,8 @@ async function createWindow(): Promise<void> {
 
   mainWindow.once('ready-to-show', () => {
     if (state.isMaximized) mainWindow?.maximize();
-    mainWindow?.show();
+    // Launched by Windows at login: stay in the tray until the user asks for the window.
+    if (!startMinimized || !tray) mainWindow?.show();
   });
 
   mainWindow.on('resize', () => mainWindow && saveWindowState(mainWindow));
@@ -616,9 +801,21 @@ async function createWindow(): Promise<void> {
   // Messenger convention: closing the window keeps the app (and its notifications) alive in the tray.
   mainWindow.on('close', event => {
     if (mainWindow) saveWindowState(mainWindow);
-    if (!isQuitting && tray) {
+    const prefs = readPreferences();
+    if (!isQuitting && tray && prefs.closeToTray) {
       event.preventDefault();
       mainWindow?.hide();
+      if (!prefs.trayHintShown) {
+        writePreferences({ trayHintShown: true });
+        if (process.platform === 'win32') {
+          tray.displayBalloon({
+            iconType: 'info',
+            title: 'Centras Chat продолжает работать',
+            content:
+              'Окно свёрнуто в область уведомлений, сообщения будут приходить. Чтобы выйти полностью — «Выйти из приложения» в меню значка. Поведение можно изменить в Настройках.',
+          });
+        }
+      }
     }
   });
 
@@ -645,8 +842,13 @@ if (!gotTheLock) {
   app.whenReady().then(async () => {
     // Frameless window draws its own titlebar; no native menu bar anywhere.
     Menu.setApplicationMenu(null);
-    await createWindow();
+    try {
+      session.defaultSession.setSpellCheckerLanguages(['ru', 'en-US']);
+    } catch (err) {
+      console.warn('Spellchecker languages unavailable:', err);
+    }
     createTray();
+    await createWindow();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

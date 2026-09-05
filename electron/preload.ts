@@ -16,14 +16,33 @@ const ALLOWED_CHANNELS = [
   'desktop:window-close',
   'desktop:window-is-maximized',
   'desktop:show-notification',
+  'desktop:get-preferences',
+  'desktop:set-preferences',
 ] as const;
 
+// Main → renderer events the bridge is allowed to relay
+const ALLOWED_EVENTS = ['desktop:window-state-changed'] as const;
+
 type AllowedChannel = (typeof ALLOWED_CHANNELS)[number];
+type AllowedEvent = (typeof ALLOWED_EVENTS)[number];
 
 function validateChannel(channel: string): asserts channel is AllowedChannel {
   if (!(ALLOWED_CHANNELS as readonly string[]).includes(channel)) {
     throw new Error(`Unauthorized IPC channel invocation: ${channel}`);
   }
+}
+
+function validateEvent(channel: string): asserts channel is AllowedEvent {
+  if (!(ALLOWED_EVENTS as readonly string[]).includes(channel)) {
+    throw new Error(`Unauthorized IPC event subscription: ${channel}`);
+  }
+}
+
+export interface DesktopPreferences {
+  launchAtLogin: boolean;
+  closeToTray: boolean;
+  zoomFactor: number;
+  trayHintShown: boolean;
 }
 
 export interface DesktopBridge {
@@ -37,6 +56,8 @@ export interface DesktopBridge {
     arch: string;
     version: string;
     isElectron: boolean;
+    isPackaged: boolean;
+    hasNativeWindowControls: boolean;
   }>;
   setBadgeCount: (count: number) => Promise<boolean>;
   pingServer: (url: string) => Promise<{ ok: boolean; status?: number; error?: string }>;
@@ -45,6 +66,9 @@ export interface DesktopBridge {
   closeWindow: () => Promise<boolean>;
   isWindowMaximized: () => Promise<boolean>;
   showNotification: (options: { title: string; body: string; silent?: boolean }) => Promise<boolean>;
+  getPreferences: () => Promise<DesktopPreferences>;
+  setPreferences: (update: Partial<DesktopPreferences>) => Promise<DesktopPreferences>;
+  onWindowStateChanged: (callback: (state: { isMaximized: boolean }) => void) => () => void;
 }
 
 const desktopBridge: DesktopBridge = {
@@ -126,6 +150,32 @@ const desktopBridge: DesktopBridge = {
     }
     validateChannel('desktop:show-notification');
     return ipcRenderer.invoke('desktop:show-notification', options);
+  },
+
+  getPreferences: async (): Promise<DesktopPreferences> => {
+    validateChannel('desktop:get-preferences');
+    return ipcRenderer.invoke('desktop:get-preferences');
+  },
+
+  setPreferences: async (update: Partial<DesktopPreferences>): Promise<DesktopPreferences> => {
+    if (typeof update !== 'object' || update === null) {
+      throw new Error('Preferences update must be an object');
+    }
+    validateChannel('desktop:set-preferences');
+    return ipcRenderer.invoke('desktop:set-preferences', update);
+  },
+
+  onWindowStateChanged: (callback: (state: { isMaximized: boolean }) => void): (() => void) => {
+    if (typeof callback !== 'function') {
+      throw new Error('Callback must be a function');
+    }
+    const channel = 'desktop:window-state-changed';
+    validateEvent(channel);
+    const listener = (_event: unknown, state: { isMaximized: boolean }) => {
+      callback({ isMaximized: Boolean(state?.isMaximized) });
+    };
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
   },
 };
 

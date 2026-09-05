@@ -184,3 +184,15 @@ The desktop client renders the same Next.js build the web version serves, so the
 - **Tray behaviour** — closing the window hides the app to the tray so notifications keep arriving; «Выйти из приложения» in the tray menu (or `before-quit`) really exits. Clicking a native notification or the tray icon brings the window back.
 - **Installer** — NSIS wizard in Russian (English fallback), per-user install, desktop + Start-menu shortcuts named «Centras Chat», artifacts `Centras-Chat-Setup-<version>.exe` and `Centras-Chat-Portable-<version>.exe`.
 - **Web install** — `public/manifest.webmanifest` lets browsers offer “Install Centras Chat” with the same icon and theme colour, giving a windowed experience close to the desktop build without the installer.
+
+## 9. Native Desktop Behaviour
+
+What the Electron shell adds on top of the shared web UI so the app feels like a first-class Windows program:
+
+- **OS caption buttons** — the window uses `titleBarStyle: 'hidden'` + `titleBarOverlay` (36 px, white, gray symbols). Windows draws minimize / maximize / close itself, so Snap Layouts, hover animations and accessibility work; the React titlebar only reserves 138 px on the right (`hasNativeWindowControls` from `getPlatformInfo`). Non-Windows builds fall back to the renderer-drawn buttons. Double-click on the titlebar toggles maximize; `desktop:window-state-changed` keeps the maximize icon in sync.
+- **Context menu + spellcheck** — right-click offers Cut / Copy / Paste / Select all, link actions, and Hunspell suggestions for `ru` and `en-US` with «Добавить в словарь» (Chromium gives frameless windows no menu by default).
+- **Zoom** — `Ctrl` + `+` / `−` / `0` step through 80–150 %; the factor is persisted and also editable in Settings → «Приложение на компьютере».
+- **Preferences** (`%APPDATA%/corporate-chat/desktop-preferences.json`, plain JSON — nothing secret): `launchAtLogin` (registers the packaged exe as a login item started with `--start-minimized`, so it boots straight into the tray), `closeToTray` (default on; the first hide shows a one-time tray balloon explaining where the app went), `zoomFactor`. IPC: `desktop:get-preferences` / `desktop:set-preferences`.
+- **Unread count** — the sidebar total goes to `app.setBadgeCount` (taskbar overlay), the tray tooltip («непрочитанных: N») and the document title `(N) Centras Chat` that web tabs show too; the taskbar button flashes only while the window is unfocused.
+- **Keyboard** — `Ctrl+K` focuses conversation search, `Ctrl+F` opens in-chat search, `Esc` closes search / the details panel / cancels a reply.
+- **Installer artwork** — `npm run icons` also renders `resources/installerSidebar.bmp` (164×314) and `resources/installerHeader.bmp` (150×57) for the NSIS welcome/finish and inner pages.

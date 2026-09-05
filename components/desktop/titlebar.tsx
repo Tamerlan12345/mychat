@@ -1,23 +1,29 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, X, ShieldCheck, BellOff, Volume2 } from 'lucide-react';
+import { Minus, Square, Copy, X, ShieldCheck, BellOff, Volume2 } from 'lucide-react';
 import { notificationService } from '@/lib/notifications/notification-service';
+
+// Width of the three OS-drawn caption buttons on Windows (3 × 46px) that overlay our titlebar.
+const NATIVE_CONTROLS_WIDTH = 138;
 
 export const AppTitlebar: React.FC = () => {
   const [isDesktop, setIsDesktop] = useState(false);
+  const [nativeControls, setNativeControls] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsDesktop(Boolean(window.desktopBridge?.isDesktop));
-      setSoundOn(notificationService.isSoundEnabled());
+    if (typeof window === 'undefined') return;
+    const bridge = window.desktopBridge;
+    setIsDesktop(Boolean(bridge?.isDesktop));
+    setSoundOn(notificationService.isSoundEnabled());
+    if (!bridge?.isDesktop) return;
 
-      if (window.desktopBridge?.isWindowMaximized) {
-        window.desktopBridge.isWindowMaximized().then(setIsMaximized).catch(() => {});
-      }
-    }
+    bridge.getPlatformInfo?.().then(info => setNativeControls(Boolean(info.hasNativeWindowControls))).catch(() => {});
+    bridge.isWindowMaximized?.().then(setIsMaximized).catch(() => {});
+    const unsubscribe = bridge.onWindowStateChanged?.(state => setIsMaximized(state.isMaximized));
+    return () => unsubscribe?.();
   }, []);
 
   const handleMinimize = () => {
@@ -36,6 +42,13 @@ export const AppTitlebar: React.FC = () => {
     window.desktopBridge?.closeWindow?.();
   };
 
+  // Native titlebars toggle maximize on double-click; buttons inside the bar must not trigger it.
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (!isDesktop) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    void handleMaximize();
+  };
+
   const toggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
@@ -45,12 +58,17 @@ export const AppTitlebar: React.FC = () => {
     }
   };
 
-  // Only render desktop window title controls if running in Electron;
-  // in web browser, render a subtle top security/branding bar
+  const windowButton =
+    'w-[46px] h-9 flex items-center justify-center transition-colors text-gray-500 hover:bg-gray-100 hover:text-slate-900';
+
   return (
     <div
-      className="h-9 bg-white border-b border-gray-200 flex items-center justify-between px-3 select-none text-gray-500 text-xs z-50 shrink-0"
-      style={{ WebkitAppRegion: isDesktop ? 'drag' : 'no-drag' } as React.CSSProperties}
+      className="h-9 bg-white border-b border-gray-200 flex items-center justify-between pl-3 select-none text-gray-500 text-xs z-50 shrink-0"
+      style={{
+        WebkitAppRegion: isDesktop ? 'drag' : 'no-drag',
+        paddingRight: isDesktop && nativeControls ? NATIVE_CONTROLS_WIDTH : 0,
+      } as React.CSSProperties}
+      onDoubleClick={handleDoubleClick}
     >
       <div
         className="flex items-center gap-2.5"
@@ -69,14 +87,14 @@ export const AppTitlebar: React.FC = () => {
       <div className="flex-1 h-full" />
 
       <div
-        className="flex items-center gap-1"
+        className="flex items-center h-full"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <button
           type="button"
           onClick={toggleSound}
           title={soundOn ? 'Звук уведомлений включен (нажмите для проверки)' : 'Звук уведомлений выключен'}
-          className={`px-2 py-1 rounded-md text-[11px] flex items-center gap-1.5 transition-colors ${
+          className={`px-2 py-1 mr-1 rounded-md text-[11px] flex items-center gap-1.5 transition-colors ${
             soundOn
               ? 'text-blue-700 hover:bg-blue-50'
               : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
@@ -88,28 +106,23 @@ export const AppTitlebar: React.FC = () => {
           </span>
         </button>
 
-        {isDesktop && (
-          <div className="flex items-center ml-2 border-l border-gray-200 pl-1">
-            <button
-              type="button"
-              onClick={handleMinimize}
-              className="w-8 h-7 flex items-center justify-center hover:bg-gray-100 hover:text-slate-900 rounded transition-colors text-gray-500"
-              title="Свернуть"
-            >
+        {isDesktop && !nativeControls && (
+          <div className="flex items-center h-full ml-1">
+            <button type="button" onClick={handleMinimize} className={windowButton} title="Свернуть">
               <Minus className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handleMaximize}
-              className="w-8 h-7 flex items-center justify-center hover:bg-gray-100 hover:text-slate-900 rounded transition-colors text-gray-500"
+              className={windowButton}
               title={isMaximized ? 'Восстановить' : 'Развернуть'}
             >
-              <Square className="w-3 h-3" />
+              {isMaximized ? <Copy className="w-3 h-3 -scale-x-100" /> : <Square className="w-3 h-3" />}
             </button>
             <button
               type="button"
               onClick={handleClose}
-              className="w-8 h-7 flex items-center justify-center hover:bg-rose-600 hover:text-white rounded transition-colors text-gray-500"
+              className="w-[46px] h-9 flex items-center justify-center transition-colors text-gray-500 hover:bg-rose-600 hover:text-white"
               title="Закрыть"
             >
               <X className="w-3.5 h-3.5" />

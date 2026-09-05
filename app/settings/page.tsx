@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, CheckCircle2, RefreshCw, Save, XCircle } from 'lucide-react';
 import { NavRail } from '@/components/sidebar/nav-rail';
+import { DesktopPreferences } from '@/components/desktop/desktop-preferences';
 import { useAuth } from '@/lib/auth/auth-context';
 import { TelegramService } from '@/services/telegram-service';
 import { Button } from '@/components/ui/button';
@@ -74,8 +75,8 @@ export default function SettingsPage() {
       <main className="flex-1 min-w-0 overflow-y-auto px-8 py-7">
         <div className="mx-auto max-w-3xl space-y-6">
           <header className="border-b border-gray-200 pb-5">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Настройки уведомлений</h1>
-            <p className="mt-1 text-sm text-slate-500">Настройки сохраняются для вашего аккаунта.</p>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Настройки</h1>
+            <p className="mt-1 text-sm text-slate-500">Уведомления сохраняются для вашего аккаунта, параметры приложения — на этом компьютере.</p>
           </header>
 
           {authLoading ? (
@@ -173,6 +174,8 @@ export default function SettingsPage() {
               </div>
             </section>
           )}
+
+          <DesktopPreferences />
         </div>
       </main>
     </div>

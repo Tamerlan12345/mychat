@@ -37,4 +37,8 @@ nsis:
   displayLanguageSelector: false
   installerIcon: resources/icon.ico
   uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+  installerHeader: resources/installerHeader.bmp
+  installerSidebar: resources/installerSidebar.bmp
+  uninstallerSidebar: resources/installerSidebar.bmp
 asar: true

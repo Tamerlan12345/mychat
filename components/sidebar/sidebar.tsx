@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Users, Search, Plus, Lock, SquarePen } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
@@ -43,11 +43,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ChatFilter>('ALL');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
     ChatService.getConversations(user.id).then(setConversations);
   }, [user, refreshKey]);
+
+  // Unread total surfaces on the taskbar icon (desktop) and in the tab title (web) alike.
+  useEffect(() => {
+    const total = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    if (typeof document !== 'undefined') {
+      const base = document.title.replace(/^\(\d+\)\s*/, '');
+      document.title = total > 0 ? `(${total}) ${base}` : base;
+    }
+    if (typeof window !== 'undefined') {
+      window.desktopBridge?.setBadgeCount?.(total).catch(() => {});
+    }
+  }, [conversations]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -170,12 +195,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="relative">
             <Search className="w-[15px] h-[15px] absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
+              ref={searchRef}
               type="text"
               value={searchQuery}
               onChange={handleSearch}
+              onKeyDown={e => {
+                if (e.key === 'Escape') {
+                  setSearchQuery('');
+                  onSearchChange?.('');
+                  e.currentTarget.blur();
+                }
+              }}
               placeholder="Поиск"
-              className="w-full h-[38px] bg-white border border-gray-200 text-slate-900 text-[13px] rounded-lg pl-9 pr-3 placeholder-gray-400 focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-100 transition-colors"
+              className="w-full h-[38px] bg-white border border-gray-200 text-slate-900 text-[13px] rounded-lg pl-9 pr-16 placeholder-gray-400 focus:outline-none focus:border-blue-600 focus:ring-[3px] focus:ring-blue-100 transition-colors"
             />
+            {!searchQuery && (
+              <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-gray-200 border-b-2 bg-white px-1.5 font-sans text-[10px] font-semibold text-gray-500 pointer-events-none">
+                Ctrl K
+              </kbd>
+            )}
           </div>
         </div>
 

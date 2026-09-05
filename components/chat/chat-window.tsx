@@ -77,6 +77,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onConversa
   const [showDetails, setShowDetails] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!conversation) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setShowSearchInput(true);
+      } else if (e.key === 'Escape') {
+        if (showSearchInput) {
+          setShowSearchInput(false);
+          setSearchInChat('');
+        } else if (showDetails) {
+          setShowDetails(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [conversation, showSearchInput, showDetails]);
+
   const markRead = (conversationId: string, lastMessage: Message | undefined) => {
     if (!user || !lastMessage) return;
     ChatService.markAsRead(conversationId, user.id, lastMessage.id)

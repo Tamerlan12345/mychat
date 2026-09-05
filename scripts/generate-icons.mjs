@@ -133,6 +133,65 @@ function encodeIco(entries) {
   return Buffer.concat([header, dir, ...entries.map(e => e.png)]);
 }
 
+// 24-bit bottom-up BMP (what NSIS expects for MUI sidebar/header bitmaps).
+function encodeBmp(width, height, rgb) {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const pixelBytes = rowSize * height;
+  const buf = Buffer.alloc(54 + pixelBytes);
+  buf.write('BM', 0, 'ascii');
+  buf.writeUInt32LE(buf.length, 2);
+  buf.writeUInt32LE(54, 10);
+  buf.writeUInt32LE(40, 14);
+  buf.writeInt32LE(width, 18);
+  buf.writeInt32LE(height, 22);
+  buf.writeUInt16LE(1, 26);
+  buf.writeUInt16LE(24, 28);
+  buf.writeUInt32LE(pixelBytes, 34);
+  buf.writeInt32LE(2835, 38);
+  buf.writeInt32LE(2835, 42);
+  for (let y = 0; y < height; y++) {
+    const srcRow = height - 1 - y;
+    for (let x = 0; x < width; x++) {
+      const si = (srcRow * width + x) * 3;
+      const di = 54 + y * rowSize + x * 3;
+      buf[di] = rgb[si + 2];
+      buf[di + 1] = rgb[si + 1];
+      buf[di + 2] = rgb[si];
+    }
+  }
+  return buf;
+}
+
+// Brand gradient panel with the icon composited on top (used for NSIS sidebar and header).
+function renderPanel(width, height, iconSize, iconX, iconY) {
+  const rgb = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const t = clamp01((y / height) * 0.75 + (x / width) * 0.25);
+      const o = (y * width + x) * 3;
+      rgb[o] = Math.round(mix(0x1d, 0x1e, t) + (1 - t) * 20);
+      rgb[o + 1] = Math.round(mix(0x4e, 0x3a, t) + (1 - t) * 20);
+      rgb[o + 2] = Math.round(mix(0xd8, 0x8a, t) + (1 - t) * 10);
+    }
+  }
+  const icon = render(iconSize);
+  for (let j = 0; j < iconSize; j++) {
+    for (let i = 0; i < iconSize; i++) {
+      const x = iconX + i;
+      const y = iconY + j;
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      const si = (j * iconSize + i) * 4;
+      const a = icon[si + 3] / 255;
+      if (a === 0) continue;
+      const o = (y * width + x) * 3;
+      rgb[o] = Math.round(mix(rgb[o], icon[si], a));
+      rgb[o + 1] = Math.round(mix(rgb[o + 1], icon[si + 1], a));
+      rgb[o + 2] = Math.round(mix(rgb[o + 2], icon[si + 2], a));
+    }
+  }
+  return encodeBmp(width, height, rgb);
+}
+
 const pngs = Object.fromEntries([16, 24, 32, 48, 64, 128, 192, 256, 512].map(s => [s, encodePng(s, render(s))]));
 const ico = encodeIco([16, 24, 32, 48, 64, 128, 256].map(size => ({ size, png: pngs[size] })));
 
@@ -144,4 +203,7 @@ writeFileSync(resolve(root, 'public/icon-192.png'), pngs[192]);
 writeFileSync(resolve(root, 'public/icon-512.png'), pngs[512]);
 writeFileSync(resolve(root, 'resources/icon.ico'), ico);
 writeFileSync(resolve(root, 'resources/icon.png'), pngs[512]);
-console.log('icons written: public/favicon.ico, public/icon*.png, resources/icon.ico, resources/icon.png');
+// NSIS MUI artwork: 164×314 sidebar (welcome/finish pages) and 150×57 header (all other pages).
+writeFileSync(resolve(root, 'resources/installerSidebar.bmp'), renderPanel(164, 314, 96, 34, 40));
+writeFileSync(resolve(root, 'resources/installerHeader.bmp'), renderPanel(150, 57, 40, 98, 8));
+console.log('icons written: public/favicon.ico, public/icon*.png, resources/icon.{ico,png}, resources/installer{Sidebar,Header}.bmp');
