@@ -1,4 +1,4 @@
-import { IDataProvider } from './data-provider';
+import { IDataProvider, MessageQueryOptions, ConnectionState } from './data-provider';
 import {
   User,
   Department,
@@ -283,6 +283,7 @@ export class MockDataProvider implements IDataProvider {
   private nextTelegramLinkToken = 1;
   private currentUserId: string;
   private messageSubscribers: Map<string, Set<(message: Message) => void>> = new Map();
+  private activitySubscribers: Set<(message: Message) => void> = new Set();
   private brandingSubscribers: Set<(branding: BrandingConfig) => void> = new Set();
 
   constructor(currentUserId = 'u1') {
@@ -535,8 +536,15 @@ export class MockDataProvider implements IDataProvider {
   }
 
   // --- MESSAGES ---
-  async getMessages(conversationId: string): Promise<Message[]> {
-    return this.messages.filter(m => m.conversation_id === conversationId);
+  async getMessages(conversationId: string, options?: MessageQueryOptions): Promise<Message[]> {
+    const all = this.messages
+      .filter(m => m.conversation_id === conversationId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    if (!options) return all;
+    const before = options.before ? new Date(options.before).getTime() : Number.POSITIVE_INFINITY;
+    const older = all.filter(m => new Date(m.created_at).getTime() < before);
+    const limit = Math.max(1, options.limit ?? 50);
+    return older.slice(Math.max(0, older.length - limit));
   }
 
   async sendMessage(data: {
@@ -576,6 +584,7 @@ export class MockDataProvider implements IDataProvider {
     if (subs) {
       subs.forEach(cb => cb(newMsg));
     }
+    this.activitySubscribers.forEach(cb => cb(newMsg));
 
     return newMsg;
   }
@@ -772,6 +781,19 @@ export class MockDataProvider implements IDataProvider {
         subs.delete(callback);
       }
     };
+  }
+
+  subscribeToConversationActivity(_userId: string, callback: (message: Message) => void): () => void {
+    this.activitySubscribers.add(callback);
+    return () => {
+      this.activitySubscribers.delete(callback);
+    };
+  }
+
+  subscribeToConnectionState(callback: (state: ConnectionState) => void): () => void {
+    // In-memory provider has no transport; it is online whenever the browser is.
+    callback('online');
+    return () => {};
   }
 
   subscribeToBranding(callback: (branding: BrandingConfig) => void): () => void {

@@ -181,3 +181,69 @@ describe('SupabaseDataProvider.getConversationMembers', () => {
     await expect(provider.getConversationMembers('c1')).rejects.toThrow(/permission denied/);
   });
 });
+
+describe('SupabaseDataProvider.getConversations', () => {
+  beforeEach(() => from.mockReset());
+
+  it('uses the conversations_overview RPC and maps last message and unread count', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          conversation: { id: 'c1', type: 'GROUP', name: 'Проект', created_by: 'u1', created_at: 't', updated_at: 't', is_private: true, description: null, avatar_url: null },
+          last_message: { id: 'm9', conversation_id: 'c1', sender_id: 'u2', content: 'Привет', message_type: 'TEXT', created_at: 't2', sender_name: 'Иван Петров', sender_avatar: null, reply_to: null, edited_at: null, deleted_at: null },
+          unread_count: 3,
+          member_count: 4,
+        },
+      ],
+      error: null,
+    });
+    (mockClient as any).rpc = rpc;
+
+    const provider = new SupabaseDataProvider();
+    const list = await provider.getConversations('u1');
+
+    expect(rpc).toHaveBeenCalledWith('conversations_overview');
+    expect(from).not.toHaveBeenCalled();
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('Проект');
+    expect(list[0].unread_count).toBe(3);
+    expect(list[0].last_message?.content).toBe('Привет');
+    expect(list[0].last_message?.sender_name).toBe('Иван Петров');
+  });
+
+  it('falls back to per-conversation queries when the RPC is missing', async () => {
+    (mockClient as any).rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'function conversations_overview() does not exist' } });
+    const eq = vi.fn().mockResolvedValue({ data: [], error: null });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const provider = new SupabaseDataProvider();
+    const list = await provider.getConversations('u1');
+
+    expect(from).toHaveBeenCalledWith('conversation_members');
+    expect(list).toEqual([]);
+  });
+});
+
+describe('SupabaseDataProvider.getMessages pagination', () => {
+  beforeEach(() => from.mockReset());
+
+  it('requests the newest page descending and returns it ascending', async () => {
+    const rows = [
+      { id: 'm3', conversation_id: 'c1', sender_id: 'u1', content: '3', message_type: 'TEXT', created_at: '2026-01-03', profiles: null, message_reactions: [], attachments: [] },
+      { id: 'm2', conversation_id: 'c1', sender_id: 'u1', content: '2', message_type: 'TEXT', created_at: '2026-01-02', profiles: null, message_reactions: [], attachments: [] },
+    ];
+    const lt = vi.fn().mockResolvedValue({ data: rows, error: null });
+    const limit = vi.fn().mockReturnValue({ lt, then: (res: any) => Promise.resolve({ data: rows, error: null }).then(res) });
+    const order = vi.fn().mockReturnValue({ limit });
+    const eq = vi.fn().mockReturnValue({ order });
+    from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const provider = new SupabaseDataProvider();
+    const page = await provider.getMessages('c1', { before: '2026-01-04', limit: 2 });
+
+    expect(order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(limit).toHaveBeenCalledWith(2);
+    expect(lt).toHaveBeenCalledWith('created_at', '2026-01-04');
+    expect(page.map(m => m.id)).toEqual(['m2', 'm3']);
+  });
+});

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, Copy, X, ShieldCheck, BellOff, Volume2 } from 'lucide-react';
+import { Minus, Square, Copy, X, ShieldCheck, BellOff, Volume2, RefreshCw, WifiOff } from 'lucide-react';
 import { notificationService } from '@/lib/notifications/notification-service';
+import { connectionMonitor, type ConnectionState } from '@/lib/connection/connection-monitor';
 
 // Width of the three OS-drawn caption buttons on Windows (3 × 46px) that overlay our titlebar.
 const NATIVE_CONTROLS_WIDTH = 138;
@@ -12,6 +13,9 @@ export const AppTitlebar: React.FC = () => {
   const [nativeControls, setNativeControls] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [connection, setConnection] = useState<ConnectionState>('online');
+
+  useEffect(() => connectionMonitor.subscribe(setConnection), []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -78,9 +82,24 @@ export const AppTitlebar: React.FC = () => {
           <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
           <span>Centras Chat</span>
         </div>
-        <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-700 font-medium">
-          <ShieldCheck className="w-3 h-3" />
-          <span>Защищённое соединение</span>
+        <div
+          className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium transition-colors ${
+            connection === 'online'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : connection === 'reconnecting'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}
+          title={connection === 'online' ? 'Соединение с сервером установлено' : connection === 'reconnecting' ? 'Восстанавливаем соединение' : 'Сеть недоступна'}
+        >
+          {connection === 'online' ? (
+            <ShieldCheck className="w-3 h-3" />
+          ) : connection === 'reconnecting' ? (
+            <RefreshCw className="w-3 h-3 animate-spin" />
+          ) : (
+            <WifiOff className="w-3 h-3" />
+          )}
+          <span>{connection === 'online' ? 'Защищённое соединение' : connection === 'reconnecting' ? 'Переподключение…' : 'Нет сети'}</span>
         </div>
       </div>
 

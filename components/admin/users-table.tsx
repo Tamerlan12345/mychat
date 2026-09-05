@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
+import { toast } from '@/components/ui/toast';
 
 export const UsersTable: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -82,7 +83,7 @@ export const UsersTable: React.FC = () => {
         // In Supabase mode, admin user creation goes through Supabase Auth invite/signup
         // instead of a direct profile insert — full admin-invite flow is a follow-up,
         // not silently swallowed here.
-        alert(err.message);
+        toast.error('Не удалось создать сотрудника', err.message);
         return;
       }
     }

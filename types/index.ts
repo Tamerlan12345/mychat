@@ -89,6 +89,8 @@ export interface Message {
   created_at: string;
   reactions?: MessageReaction[];
   attachments?: Attachment[];
+  /** Client-only: set while an optimistic message is in flight or after it failed to send. */
+  local_status?: 'pending' | 'failed';
 }
 
 export interface UserSettings {

@@ -3,6 +3,8 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth/auth-context';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { AppTitlebar } from '@/components/desktop/titlebar';
+import { ConnectionBanner } from '@/components/ui/connection-banner';
+import { Toaster } from '@/components/ui/toast';
 
 export const metadata = {
   title: 'Centras Chat',
@@ -28,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ThemeProvider>
             <AppTitlebar />
+            <ConnectionBanner />
             <main className="flex-1 flex overflow-hidden">{children}</main>
+            <Toaster />
           </ThemeProvider>
         </AuthProvider>
       </body>

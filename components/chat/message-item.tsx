@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Download, Smile, Pencil, Trash2, Reply, CheckCheck } from 'lucide-react';
+import { FileText, Download, Smile, Pencil, Trash2, Reply, CheckCheck, Clock, AlertCircle } from 'lucide-react';
 import { Message, User } from '@/types';
 import { Avatar } from '@/components/ui/avatar';
 import { FileService } from '@/services/file-service';
@@ -15,6 +15,8 @@ interface MessageItemProps {
   onEditMessage: (messageId: string, content: string) => void;
   onDeleteMessage: (messageId: string) => void;
   onReplyMessage: (message: Message) => void;
+  /** Re-send a message whose optimistic delivery failed. */
+  onRetry?: (message: Message) => void;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '🔥', '🎉', '😃', '🚀'];
@@ -35,6 +37,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onEditMessage,
   onDeleteMessage,
   onReplyMessage,
+  onRetry,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
@@ -42,6 +45,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const isOwner = currentUser?.id === message.sender_id;
   const isDeleted = !!message.deleted_at;
+  const isPending = message.local_status === 'pending';
+  const isFailed = message.local_status === 'failed';
   const senderName = message.sender_name || 'Сотрудник';
 
   const handleSaveEdit = () => {
@@ -66,7 +71,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     <div
       className={`group relative grid grid-cols-[40px_minmax(0,1fr)] gap-x-3.5 px-3 rounded-xl transition-colors hover:bg-gray-50 ${
         compact ? 'py-0.5' : 'py-1.5'
-      } ${isDeleted ? 'opacity-50' : ''}`}
+      } ${isDeleted ? 'opacity-50' : ''} ${isPending ? 'opacity-70' : ''}`}
     >
       {compact ? (
         <span className="text-[10.5px] tabular-nums text-gray-400 text-center pt-[5px] opacity-0 group-hover:opacity-100 transition-opacity select-none">
@@ -84,7 +89,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <span className="self-center text-[10px] font-semibold text-gray-500 bg-gray-100 rounded px-1.5 py-px">вы</span>
             )}
             <span className="text-[11px] tabular-nums text-gray-400">{formatTime(message.created_at)}</span>
-            {isOwner && <CheckCheck className="self-center w-3.5 h-3.5 text-blue-600" />}
+            {isOwner && isPending && <Clock className="self-center w-3.5 h-3.5 text-gray-400" aria-label="Отправляется" />}
+            {isOwner && !isPending && !isFailed && <CheckCheck className="self-center w-3.5 h-3.5 text-blue-600" />}
             {message.edited_at && <span className="text-[11px] text-gray-400">изменено</span>}
           </div>
         )}
@@ -128,6 +134,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
         ) : (
           <p className="text-sm text-gray-800 whitespace-pre-wrap leading-[1.55] break-words">{message.content}</p>
+        )}
+
+        {isFailed && (
+          <div className="flex items-center gap-2 text-xs text-rose-600">
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>Не отправлено</span>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={() => onRetry(message)}
+                className="font-semibold underline underline-offset-2 hover:text-rose-700"
+              >
+                Повторить
+              </button>
+            )}
+          </div>
         )}
 
         {message.attachments && message.attachments.length > 0 && (
@@ -180,7 +202,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       </div>
 
       {/* Hover actions */}
-      {!isDeleted && (
+      {!isDeleted && !message.local_status && (
         <div className="absolute right-4 -top-3.5 hidden group-hover:flex items-center gap-0.5 p-[3px] bg-white border border-gray-200 rounded-[10px] shadow-[0_4px_12px_rgba(15,23,42,0.08),0_1px_2px_rgba(15,23,42,0.05)] z-10">
           <div className="relative">
             <button

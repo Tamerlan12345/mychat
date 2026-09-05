@@ -20,6 +20,14 @@ export interface TelegramLink {
   expiresAt: string;
 }
 
+export interface MessageQueryOptions {
+  /** ISO timestamp; return messages created strictly before it. */
+  before?: string;
+  limit?: number;
+}
+
+export type ConnectionState = 'online' | 'reconnecting' | 'offline';
+
 export interface IDataProvider {
   // Authentication & Users
   getUsers(): Promise<User[]>;
@@ -53,7 +61,8 @@ export interface IDataProvider {
   markConversationAsRead(conversationId: string, userId: string, messageId: string): Promise<boolean>;
 
   // Messages
-  getMessages(conversationId: string): Promise<Message[]>;
+  /** Without options: full history (ascending). With options: the `limit` newest messages strictly before `before`. */
+  getMessages(conversationId: string, options?: MessageQueryOptions): Promise<Message[]>;
   sendMessage(data: {
     conversation_id: string;
     sender_id: string;
@@ -92,5 +101,9 @@ export interface IDataProvider {
 
   // Realtime Subscriptions
   subscribeToMessages(conversationId: string, callback: (message: Message) => void): () => void;
+  /** Every new message in any conversation the user belongs to — drives the live conversation list. */
+  subscribeToConversationActivity(userId: string, callback: (message: Message) => void): () => void;
+  /** Realtime transport health; the UI combines it with navigator.onLine. */
+  subscribeToConnectionState(callback: (state: ConnectionState) => void): () => void;
   subscribeToBranding(callback: (branding: BrandingConfig) => void): () => void;
 }

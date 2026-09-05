@@ -55,3 +55,45 @@ describe('MockDataProvider unread counters', () => {
     expect(later?.unread_count).toBe(1);
   });
 });
+
+describe('MockDataProvider message pagination', () => {
+  it('returns the newest page first and older pages before a cursor', async () => {
+    const provider = new MockDataProvider('u1');
+    for (let i = 0; i < 7; i++) {
+      await provider.sendMessage({ conversation_id: 'c3', sender_id: i % 2 ? 'u1' : 'u2', content: `msg ${i}` });
+      await new Promise(r => setTimeout(r, 2));
+    }
+
+    const all = await provider.getMessages('c3');
+    const newest = await provider.getMessages('c3', { limit: 3 });
+    expect(newest.map(m => m.content)).toEqual(all.slice(-3).map(m => m.content));
+
+    const older = await provider.getMessages('c3', { before: newest[0].created_at, limit: 3 });
+    expect(older).toHaveLength(3);
+    expect(older.every(m => new Date(m.created_at) < new Date(newest[0].created_at))).toBe(true);
+    expect(older.map(m => m.content)).toEqual(all.slice(-6, -3).map(m => m.content));
+  });
+});
+
+describe('MockDataProvider activity feed', () => {
+  it('notifies activity subscribers about messages in any conversation', async () => {
+    const provider = new MockDataProvider('u1');
+    const seen: string[] = [];
+    const unsubscribe = provider.subscribeToConversationActivity('u1', m => seen.push(m.conversation_id));
+
+    await provider.sendMessage({ conversation_id: 'c2', sender_id: 'u4', content: 'a' });
+    await provider.sendMessage({ conversation_id: 'c5', sender_id: 'u2', content: 'b' });
+    expect(seen).toEqual(['c2', 'c5']);
+
+    unsubscribe();
+    await provider.sendMessage({ conversation_id: 'c2', sender_id: 'u4', content: 'c' });
+    expect(seen).toHaveLength(2);
+  });
+
+  it('reports the in-memory transport as online', () => {
+    const provider = new MockDataProvider('u1');
+    const states: string[] = [];
+    provider.subscribeToConnectionState(s => states.push(s));
+    expect(states).toEqual(['online']);
+  });
+});

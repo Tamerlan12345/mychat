@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Users, Search, Plus, Lock, SquarePen } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Avatar } from '@/components/ui/avatar';
-import { Conversation } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast';
+import { Conversation, Message } from '@/types';
 import { ChatService } from '@/services/chat-service';
 import { NavRail, ChatFilter } from './nav-rail';
 
@@ -32,6 +34,22 @@ function formatListTime(iso?: string): string {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 }
 
+const activityTime = (c: Conversation) => new Date(c.last_message?.created_at || c.updated_at).getTime() || 0;
+const byRecency = (a: Conversation, b: Conversation) => activityTime(b) - activityTime(a);
+
+const RowSkeleton: React.FC = () => (
+  <div className="flex items-center gap-3 p-2.5" aria-hidden="true">
+    <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+    <div className="flex-1 flex flex-col gap-2">
+      <div className="flex justify-between">
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="h-3 w-8" />
+      </div>
+      <Skeleton className="h-3 w-40" />
+    </div>
+  </div>
+);
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeConversationId,
   onSelectConversation,
@@ -40,19 +58,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
   refreshKey = 0,
 }) => {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ChatFilter>('ALL');
   const searchRef = useRef<HTMLInputElement>(null);
+  const activeIdRef = useRef<string | undefined>(activeConversationId);
+  activeIdRef.current = activeConversationId;
+
+  const load = useCallback(() => {
+    if (!user) return;
+    ChatService.getConversations(user.id)
+      .then(setConversations)
+      .catch(err => {
+        console.error('getConversations failed:', err);
+        setConversations(prev => prev ?? []);
+        toast.error('Не удалось загрузить список чатов');
+      });
+  }, [user]);
 
   useEffect(() => {
+    load();
+  }, [load, refreshKey]);
+
+  // Live list: a new message anywhere bumps its conversation, updates the preview and the counter.
+  useEffect(() => {
     if (!user) return;
-    ChatService.getConversations(user.id).then(setConversations);
-  }, [user, refreshKey]);
+    return ChatService.subscribeToConversationActivity(user.id, (message: Message) => {
+      setConversations(prev => {
+        if (!prev) return prev;
+        const idx = prev.findIndex(c => c.id === message.conversation_id);
+        if (idx === -1) {
+          load();
+          return prev;
+        }
+        const conv = prev[idx];
+        const isOpen = activeIdRef.current === conv.id;
+        const fromOther = message.sender_id !== user.id;
+        const next: Conversation = {
+          ...conv,
+          last_message: message,
+          updated_at: message.created_at,
+          unread_count: fromOther && !isOpen ? (conv.unread_count || 0) + 1 : conv.unread_count || 0,
+        };
+        return prev.map(c => (c.id === conv.id ? next : c));
+      });
+    });
+  }, [user, load]);
+
+  // Opening a conversation clears its counter immediately; the server confirms via refreshKey.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    setConversations(prev =>
+      prev ? prev.map(c => (c.id === activeConversationId && c.unread_count ? { ...c, unread_count: 0 } : c)) : prev
+    );
+  }, [activeConversationId]);
 
   // Unread total surfaces on the taskbar icon (desktop) and in the tab title (web) alike.
   useEffect(() => {
-    const total = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    const total = (conversations ?? []).reduce((sum, c) => sum + (c.unread_count || 0), 0);
     if (typeof document !== 'undefined') {
       const base = document.title.replace(/^\(\d+\)\s*/, '');
       document.title = total > 0 ? `(${total}) ${base}` : base;
@@ -80,15 +143,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (onSearchChange) onSearchChange(val);
   };
 
-  const filteredConversations = conversations.filter(c => {
+  const filteredConversations = (conversations ?? []).filter(c => {
     if (!searchQuery) return true;
     const name = c.name || '';
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   // Strict separation: only GROUPS and DIRECT chats exist. Channels are removed.
-  const groups = filteredConversations.filter(c => c.type === 'GROUP' || c.type === 'CHANNEL');
-  const dms = filteredConversations.filter(c => c.type === 'DIRECT');
+  const groups = filteredConversations.filter(c => c.type === 'GROUP' || c.type === 'CHANNEL').sort(byRecency);
+  const dms = filteredConversations.filter(c => c.type === 'DIRECT').sort(byRecency);
+  const isLoading = conversations === null;
 
   const renderRow = (c: Conversation) => {
     const isActive = activeConversationId === c.id;
@@ -218,33 +282,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-4">
-          {(activeTab === 'ALL' || activeTab === 'GROUPS') && (
-            <div className="space-y-0.5">
-              {sectionLabel('Рабочие группы', createGroupButton)}
-              {groups.length === 0
-                ? activeTab === 'GROUPS'
-                  ? groupsEmpty
-                  : <p className="px-2.5 py-2 text-xs text-gray-500">Групп пока нет</p>
-                : groups.map(renderRow)}
+          {isLoading ? (
+            <div className="space-y-1" aria-label="Загрузка списка чатов">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <RowSkeleton key={i} />
+              ))}
             </div>
-          )}
+          ) : (
+            <>
+              {(activeTab === 'ALL' || activeTab === 'GROUPS') && (
+                <div className="space-y-0.5">
+                  {sectionLabel('Рабочие группы', createGroupButton)}
+                  {groups.length === 0
+                    ? activeTab === 'GROUPS'
+                      ? groupsEmpty
+                      : <p className="px-2.5 py-2 text-xs text-gray-500">Групп пока нет</p>
+                    : groups.map(renderRow)}
+                </div>
+              )}
 
-          {(activeTab === 'ALL' || activeTab === 'DIRECT') && (
-            <div className="space-y-0.5">
-              {sectionLabel(
-                'Личные сообщения',
-                <Link href="/contacts" className="text-[11px] text-blue-700 hover:text-blue-800 font-medium">
-                  Справочник
-                </Link>
+              {(activeTab === 'ALL' || activeTab === 'DIRECT') && (
+                <div className="space-y-0.5">
+                  {sectionLabel(
+                    'Личные сообщения',
+                    <Link href="/contacts" className="text-[11px] text-blue-700 hover:text-blue-800 font-medium">
+                      Справочник
+                    </Link>
+                  )}
+                  {dms.length === 0 ? (
+                    <p className="px-2.5 py-2 text-xs text-gray-500">
+                      {searchQuery ? 'Ничего не найдено' : 'Личных диалогов пока нет'}
+                    </p>
+                  ) : (
+                    dms.map(renderRow)
+                  )}
+                </div>
               )}
-              {dms.length === 0 ? (
-                <p className="px-2.5 py-2 text-xs text-gray-500">
-                  {searchQuery ? 'Ничего не найдено' : 'Личных диалогов пока нет'}
-                </p>
-              ) : (
-                dms.map(renderRow)
-              )}
-            </div>
+            </>
           )}
         </div>
       </aside>

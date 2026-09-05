@@ -1,4 +1,5 @@
 import { getDataProvider } from '@/lib/provider';
+import type { ConnectionState, MessageQueryOptions } from '@/lib/provider/data-provider';
 import { Conversation, Message, MessageReaction, Attachment, ConversationMember } from '@/types';
 
 export class ChatService {
@@ -10,8 +11,8 @@ export class ChatService {
     return getDataProvider().getConversationById(id);
   }
 
-  static async getMessages(conversationId: string): Promise<Message[]> {
-    return getDataProvider().getMessages(conversationId);
+  static async getMessages(conversationId: string, options?: MessageQueryOptions): Promise<Message[]> {
+    return getDataProvider().getMessages(conversationId, options);
   }
 
   static async sendMessage(data: {
@@ -51,5 +52,13 @@ export class ChatService {
 
   static subscribeToMessages(conversationId: string, callback: (message: Message) => void): () => void {
     return getDataProvider().subscribeToMessages(conversationId, callback);
+  }
+
+  static subscribeToConversationActivity(userId: string, callback: (message: Message) => void): () => void {
+    return getDataProvider().subscribeToConversationActivity(userId, callback);
+  }
+
+  static subscribeToConnectionState(callback: (state: ConnectionState) => void): () => void {
+    return getDataProvider().subscribeToConnectionState(callback);
   }
 }

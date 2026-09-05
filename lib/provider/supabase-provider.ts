@@ -14,7 +14,7 @@ import {
   UserSettings,
   ConversationMember,
 } from '@/types';
-import type { TelegramLink } from './data-provider';
+import type { TelegramLink, MessageQueryOptions, ConnectionState } from './data-provider';
 
 export function mapProfileRow(row: any): User {
   return {
@@ -100,6 +100,22 @@ export function mapConversationMemberRow(row: any): ConversationMember {
     joined_at: row.joined_at,
     last_read_message_id: row.last_read_message_id ?? undefined,
     user: row.profiles ? mapProfileRow(row.profiles) : undefined,
+  };
+}
+
+function mapOverviewRow(row: any): Conversation {
+  const conversation = mapConversationRow(row.conversation ?? {});
+  const lm = row.last_message;
+  return {
+    ...conversation,
+    last_message: lm
+      ? {
+          ...mapMessageRow(lm),
+          sender_name: lm.sender_name ?? undefined,
+          sender_avatar: lm.sender_avatar ?? undefined,
+        }
+      : undefined,
+    unread_count: typeof row.unread_count === 'number' ? row.unread_count : 0,
   };
 }
 
@@ -286,6 +302,17 @@ export class SupabaseDataProvider implements IDataProvider {
 
   // --- CONVERSATIONS ---
   async getConversations(userId: string): Promise<Conversation[]> {
+    // One round trip via the conversations_overview() RPC (migration 004). Falls back to the
+    // per-conversation queries when the function is not installed yet.
+    const { data, error } = await this.client.rpc('conversations_overview');
+    if (!error && Array.isArray(data)) {
+      return data.map(mapOverviewRow);
+    }
+    console.warn('conversations_overview RPC unavailable, using per-conversation queries:', error?.message);
+    return this.getConversationsLegacy(userId);
+  }
+
+  private async getConversationsLegacy(userId: string): Promise<Conversation[]> {
     const { data, error } = await this.client
       .from('conversation_members')
       .select('conversations(*)')
@@ -434,14 +461,27 @@ export class SupabaseDataProvider implements IDataProvider {
   }
 
   // --- MESSAGES ---
-  async getMessages(conversationId: string): Promise<Message[]> {
-    const { data, error } = await this.client
+  async getMessages(conversationId: string, options?: MessageQueryOptions): Promise<Message[]> {
+    if (!options) {
+      const { data, error } = await this.client
+        .from('messages')
+        .select(MESSAGE_SELECT)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+      if (error) throw new Error(`getMessages failed: ${error.message}`);
+      return (data ?? []).map(mapMessageRow);
+    }
+
+    let query = this.client
       .from('messages')
       .select(MESSAGE_SELECT)
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false })
+      .limit(Math.max(1, options.limit ?? 50));
+    if (options.before) query = query.lt('created_at', options.before);
+    const { data, error } = await query;
     if (error) throw new Error(`getMessages failed: ${error.message}`);
-    return (data ?? []).map(mapMessageRow);
+    return (data ?? []).map(mapMessageRow).reverse();
   }
 
   async sendMessage(data: {
@@ -550,6 +590,40 @@ export class SupabaseDataProvider implements IDataProvider {
     return () => {
       this.client.removeChannel(channel);
     };
+  }
+
+  subscribeToConversationActivity(userId: string, callback: (message: Message) => void): () => void {
+    // No conversation filter: Realtime applies RLS, so only rows from the user's conversations arrive.
+    const channel = this.client
+      .channel(`activity:${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (payload: any) => {
+        const { data, error } = await this.client
+          .from('messages')
+          .select(MESSAGE_SELECT)
+          .eq('id', payload.new.id)
+          .single();
+        if (!error && data) callback(mapMessageRow(data));
+      })
+      .subscribe();
+    return () => {
+      this.client.removeChannel(channel);
+    };
+  }
+
+  subscribeToConnectionState(callback: (state: ConnectionState) => void): () => void {
+    const realtime: any = (this.client as any).realtime;
+    const degraded = () =>
+      callback(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting');
+    try {
+      realtime?.onOpen?.(() => callback('online'));
+      realtime?.onClose?.(degraded);
+      realtime?.onError?.(degraded);
+    } catch (err) {
+      console.warn('Realtime state hooks unavailable:', err);
+    }
+    callback('online');
+    // realtime-js keeps these hooks for the life of the singleton client; nothing to detach.
+    return () => {};
   }
 
   // --- BRANDING ---
