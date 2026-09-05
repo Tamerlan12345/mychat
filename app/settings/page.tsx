@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCircle2, RefreshCw, Save, XCircle } from 'lucide-react';
+import { Bell, CheckCircle2, RefreshCw, Save, Volume2, XCircle } from 'lucide-react';
+import { features } from '@/lib/features';
+import { notificationService } from '@/lib/notifications/notification-service';
+import { toast } from '@/components/ui/toast';
 import { NavRail } from '@/components/sidebar/nav-rail';
 import { DesktopPreferences } from '@/components/desktop/desktop-preferences';
 import { useAuth } from '@/lib/auth/auth-context';
@@ -137,6 +140,7 @@ export default function SettingsPage() {
                   />
                 </label>
 
+                {features.telegram && (
                 <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-blue-100 bg-blue-50/50 p-4">
                   <span>
                     <span className="block text-sm font-medium text-slate-800">Telegram-уведомления</span>
@@ -153,6 +157,25 @@ export default function SettingsPage() {
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                 </label>
+                )}
+
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
+                  <span>
+                    <span className="block text-sm font-medium text-slate-800">Звук и системные уведомления</span>
+                    <span className="mt-1 block text-xs text-slate-500">Проверить сигнал и разрешить уведомления в системе.</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      notificationService.playChime();
+                      const granted = await notificationService.requestPermission();
+                      toast.info(granted ? 'Уведомления включены' : 'Уведомления не разрешены', granted ? undefined : 'Разрешите их в настройках браузера или системы.');
+                    }}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    <Volume2 className="h-4 w-4" /> Проверить
+                  </button>
+                </div>
               </div>
 
               {saveError && (

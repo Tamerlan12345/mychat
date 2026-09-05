@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Mail, ArrowRight, AlertCircle, ShieldCheck, CheckCircle2, MessageSquare, Users, Send, Server } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, ShieldCheck, CheckCircle2, MessageSquare, Users, Server } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { connectionManager } from '@/lib/desktop/connection-manager';
 import { ServerConnectionDialog } from '@/components/desktop/server-connection-dialog';
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [serverLabel, setServerLabel] = useState<string>('');
+  const [demoMode, setDemoMode] = useState(false);
   const [serverDialogOpen, setServerDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function LoginPage() {
       .then(cfg => {
         if (!cfg.serverUrl) {
           setServerLabel('демо-режим (без сервера)');
+          setDemoMode(true);
           return;
         }
         try {
@@ -109,10 +111,6 @@ export default function LoginPage() {
             <li className="flex items-start gap-3">
               <span className="mt-0.5 w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><MessageSquare className="w-4 h-4" /></span>
               <span>Файлы, ответы, реакции и уведомления на рабочем столе</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="mt-0.5 w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center shrink-0"><Send className="w-4 h-4" /></span>
-              <span>Мост с Telegram — важные сообщения доходят и вне офиса</span>
             </li>
           </ul>
         </div>
@@ -201,6 +199,7 @@ export default function LoginPage() {
           </div>
           <ServerConnectionDialog isOpen={serverDialogOpen} onClose={() => setServerDialogOpen(false)} />
 
+          {demoMode && (
           <div className="pt-5 border-t border-gray-200 space-y-2.5">
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.07em]">Демо-аккаунты для проверки</p>
             <div className="space-y-1.5">
@@ -235,6 +234,7 @@ export default function LoginPage() {
               })}
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>

@@ -162,18 +162,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           </button>
 
           <div className="flex items-center gap-3">
-            <span className="hidden md:inline text-[11px] text-gray-400">
-              <kbd className="font-sans text-[10px] font-semibold text-gray-500 bg-white border border-gray-200 border-b-2 rounded px-1">Enter</kbd>{' '}
-              отправить ·{' '}
-              <kbd className="font-sans text-[10px] font-semibold text-gray-500 bg-white border border-gray-200 border-b-2 rounded px-1">Shift</kbd>+
-              <kbd className="font-sans text-[10px] font-semibold text-gray-500 bg-white border border-gray-200 border-b-2 rounded px-1">Enter</kbd>{' '}
-              новая строка
-            </span>
             <button
               type="submit"
               disabled={!canSend}
               className="w-9 h-9 rounded-[10px] bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-[0_2px_6px_rgba(37,99,235,0.35)] hover:from-blue-600 hover:to-blue-700 disabled:opacity-40 disabled:shadow-none transition-all flex items-center justify-center"
-              title="Отправить сообщение"
+              title="Отправить (Enter). Новая строка — Shift+Enter"
             >
               <Send className="w-4 h-4" />
             </button>

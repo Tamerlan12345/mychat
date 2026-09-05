@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageSquare, Users, Settings, Shield, LogOut, Bell, BookUser, Send, User as UserIcon } from 'lucide-react';
+import { MessageSquare, Users, Settings, Shield, LogOut, BookUser, Send, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Avatar, STATUS_DOT } from '@/components/ui/avatar';
 import { UserStatus } from '@/types';
-import { notificationService } from '@/lib/notifications/notification-service';
+import { features } from '@/lib/features';
 
 export type ChatFilter = 'ALL' | 'GROUPS' | 'DIRECT';
 
@@ -85,25 +85,16 @@ export const NavRail: React.FC<NavRailProps> = ({ filter, onFilterChange }) => {
           <BookUser className="w-5 h-5" />
           <span>Контакты</span>
         </Link>
-        <Link href="/telegram" className={itemClass(pathname === '/telegram')} title="Интеграция с Telegram">
-          {pathname === '/telegram' && <ActiveBar />}
-          <Send className="w-5 h-5" />
-          <span>Telegram</span>
-        </Link>
+        {features.telegram && (
+          <Link href="/telegram" className={itemClass(pathname === '/telegram')} title="Интеграция с Telegram">
+            {pathname === '/telegram' && <ActiveBar />}
+            <Send className="w-5 h-5" />
+            <span>Telegram</span>
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-col items-center gap-1 relative">
-        <button
-          type="button"
-          onClick={async () => {
-            notificationService.playChime();
-            await notificationService.requestPermission();
-          }}
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-slate-900 transition-colors"
-          title="Проверить звук и разрешить push-уведомления"
-        >
-          <Bell className="w-[18px] h-[18px]" />
-        </button>
         {isAdmin && (
           <Link
             href="/admin"

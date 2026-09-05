@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Shield, Users, Building2, Lock, Palette, FileText, Settings, Send, Webhook } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { NavRail } from '@/components/sidebar/nav-rail';
+import { features } from '@/lib/features';
 
 export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
@@ -41,8 +42,8 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
     { href: '/admin/roles', label: 'Роли', icon: Lock },
     { href: '/admin/branding', label: 'Брендинг', icon: Palette },
     { href: '/admin/audit', label: 'Журнал аудита', icon: FileText },
-    { href: '/admin/integrations', label: 'Интеграции', icon: Webhook },
-    { href: '/telegram', label: 'Telegram-бот', icon: Send },
+    ...(features.integrations ? [{ href: '/admin/integrations', label: 'Интеграции', icon: Webhook }] : []),
+    ...(features.telegram ? [{ href: '/telegram', label: 'Telegram-бот', icon: Send }] : []),
     { href: '/admin/settings', label: 'Система', icon: Settings },
   ];
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Lock, Search, Bell, Info, MessageSquare, X, ChevronUp, RefreshCw } from 'lucide-react';
+import { Lock, Search, Info, MessageSquare, X, ChevronUp, RefreshCw } from 'lucide-react';
 import { Conversation, Message, Attachment, ConversationMember } from '@/types';
 import { useAuth } from '@/lib/auth/auth-context';
 import { ChatService } from '@/services/chat-service';
@@ -442,23 +442,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onConversa
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={async () => {
-                notificationService.playChime();
-                const granted = await notificationService.requestPermission();
-                toast.info(
-                  granted ? 'Уведомления включены' : 'Уведомления не разрешены',
-                  granted ? 'Звук и системные уведомления о новых сообщениях работают.' : 'Разрешите уведомления в настройках браузера или системы.'
-                );
-              }}
-              className={headerButton()}
-              title="Проверить звуковой сигнал и разрешить уведомления"
-            >
-              <Bell className="w-[17px] h-[17px]" />
-            </button>
-
-            <span className="w-px h-[18px] bg-gray-200 mx-1.5" />
 
             <button
               type="button"

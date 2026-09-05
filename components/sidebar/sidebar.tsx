@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
 import { Users, Search, Plus, Lock, SquarePen } from 'lucide-react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Avatar } from '@/components/ui/avatar';
@@ -303,12 +302,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               {(activeTab === 'ALL' || activeTab === 'DIRECT') && (
                 <div className="space-y-0.5">
-                  {sectionLabel(
-                    'Личные сообщения',
-                    <Link href="/contacts" className="text-[11px] text-blue-700 hover:text-blue-800 font-medium">
-                      Справочник
-                    </Link>
-                  )}
+                  {sectionLabel('Личные сообщения')}
                   {dms.length === 0 ? (
                     <p className="px-2.5 py-2 text-xs text-gray-500">
                       {searchQuery ? 'Ничего не найдено' : 'Личных диалогов пока нет'}
